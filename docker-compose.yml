@@ -4,6 +4,8 @@ services:
     container_name: ledgerflow-web
     restart: unless-stopped
     env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
       - db_data:/app/db
       - app_data:/app/data
@@ -11,18 +13,6 @@ services:
     environment:
       - DEBUG=False
       - DB_PATH=/app/db/db.sqlite3
-
-  nginx:
-    image: nginx:alpine
-    container_name: ledgerflow-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - static_files:/app/staticfiles:ro
-    depends_on:
-      - web
 
 volumes:
   db_data:

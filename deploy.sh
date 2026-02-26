@@ -24,18 +24,16 @@ fi
 if [ ! -f .env ]; then
     echo "生成 .env 配置文件..."
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))" 2>/dev/null || openssl rand -base64 50)
-    SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "localhost")
     cat > .env << EOF
 SECRET_KEY=${SECRET_KEY}
 DEBUG=False
-ALLOWED_HOSTS=${SERVER_IP},localhost
-CSRF_TRUSTED_ORIGINS=http://${SERVER_IP}
+ALLOWED_HOSTS=524120.xyz,localhost
+CSRF_TRUSTED_ORIGINS=https://524120.xyz
 DB_PATH=/app/db/db.sqlite3
 GOOGLE_API_KEY=
 GEMINI_MODEL=gemini-1.5-flash
 EOF
-    echo ".env 已生成，服务器 IP: ${SERVER_IP}"
-    echo "如需修改请编辑 .env 文件"
+    echo ".env 已生成"
 fi
 
 echo ""
@@ -45,8 +43,13 @@ docker compose up -d --build
 echo ""
 echo "========================================="
 echo "  部署完成！"
-echo "  访问地址: http://$(curl -s ifconfig.me 2>/dev/null || echo 'your-server-ip')"
+echo "  访问地址: https://524120.xyz"
 echo "========================================="
+echo ""
+echo "请确保 Caddy 已配置反代，参考 deploy/Caddyfile："
+echo "  524120.xyz {"
+echo "      reverse_proxy 127.0.0.1:8000"
+echo "  }"
 echo ""
 echo "常用命令："
 echo "  查看日志:   docker compose logs -f"
