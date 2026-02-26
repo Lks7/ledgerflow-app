@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}复式记账{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+</head>
+
+<body>
+  <div class="app-shell">
+    <aside class="side-nav">
+      <div class="brand">LedgerFlow</div>
+      <p class="brand-sub">复式记账助手</p>
+      <nav>
+        <a href="/" class="{% if request.path == '/' %}active{% endif %}">仪表盘</a>
+        <a href="/journals/" class="{% if request.path == '/journals/' %}active{% endif %}">交易明细</a>
+        <a href="/journals/new" class="{% if request.path == '/journals/new' %}active{% endif %}">新增记账</a>
+        <a href="/journals/accounts" class="{% if request.path == '/journals/accounts' %}active{% endif %}">账户设置</a>
+        <a href="/journals/categories" class="{% if request.path == '/journals/categories' %}active{% endif %}">分类管理</a>
+        <a href="/journals/tags" class="{% if request.path == '/journals/tags' %}active{% endif %}">标签管理</a>
+        <a href="/journals/logs" class="{% if request.path == '/journals/logs' %}active{% endif %}">记账日志</a>
+        <a href="/ai/config" class="{% if request.path == '/ai/config' %}active{% endif %}">AI配置</a>
+        <a href="/lists/" class="{% if request.path == '/lists/' %}active{% endif %}">购物清单</a>
+        <a href="/reports" class="{% if request.path == '/reports' %}active{% endif %}">分析报告</a>
+      </nav>
+    </aside>
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  {% if messages %}
+  <div class="toast-container" id="toast-container">
+    {% for message in messages %}
+    <div class="toast toast-{{ message.tags|default:'info' }}">
+      <span class="toast-icon">
+        {% if message.tags == 'success' %}✅{% elif message.tags == 'error' %}❌{% elif message.tags == 'warning' %}⚠️{% else %}ℹ️{% endif %}
+      </span>
+      <span class="toast-text">{{ message }}</span>
+      <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+    </div>
+    {% endfor %}
+  </div>
+  <script>
+    setTimeout(function() {
+      var c = document.getElementById('toast-container');
+      if (c) { c.classList.add('toast-fade-out'); setTimeout(function() { c.remove(); }, 400); }
+    }, 3500);
+  </script>
+  {% endif %}
+</body>
+
+</html>

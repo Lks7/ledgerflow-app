@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}AI配置{% endblock %}
+{% block content %}
+<section class="panel ai-hero">
+  <div>
+    <h2>AI 控制台</h2>
+    <p class="subtitle">在这里配置模型网关、密钥和提示词，让 AI 更懂你的记账场景。</p>
+  </div>
+  <div class="ai-hero-tags">
+    <span class="pill">消费分析</span>
+    <span class="pill">预算建议</span>
+    <span class="pill">可配置提示词</span>
+  </div>
+</section>
+
+<div class="ai-config-layout">
+  <section class="panel ai-config-main">
+    {% if test_result %}
+    <div class="ai-test-banner {% if test_result.ok %}ok{% else %}fail{% endif %}">
+      {% if test_result.ok %}
+      <p class="ok-text">连接测试成功：{{ test_result.message }}</p>
+      {% else %}
+      <p class="error">连接测试失败：{{ test_result.message }}</p>
+      {% endif %}
+      <p class="muted">Provider: {{ test_result.provider }} | Model: {{ test_result.model }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/ai/config" class="ai-config-form">
+      {% csrf_token %}
+      <div class="ai-form-grid">
+        <label>
+          提供商
+          <select name="provider">
+            <option value="google" {% if config.provider == 'google' %}selected{% endif %}>Google</option>
+            <option value="openai" {% if config.provider == 'openai' %}selected{% endif %}>OpenAI兼容</option>
+            <option value="custom" {% if config.provider == 'custom' %}selected{% endif %}>自定义</option>
+          </select>
+        </label>
+        <label>
+          模型名称
+          <input name="model_name" value="{{ config.model_name }}" placeholder="gemini-1.5-flash" />
+        </label>
+      </div>
+
+      <label>
+        API 地址
+        <input name="api_base_url" value="{{ config.api_base_url }}" placeholder="https://api.openai.com 或 Gemini 网关地址" />
+      </label>
+
+      <label>
+        API 密钥
+        <input name="api_key" value="{{ config.api_key }}" placeholder="粘贴 API Key" />
+      </label>
+
+      <label>
+        系统提示词
+        <textarea name="system_prompt" rows="11" placeholder="告诉 AI 在本项目中应如何分析账单并给建议">{{ config.system_prompt }}</textarea>
+      </label>
+
+      <div class="row">
+        <button type="submit" name="action" value="save">保存配置</button>
+        <button type="submit" name="action" value="test">测试连接</button>
+        <a class="btn-edit" href="/">返回仪表盘</a>
+      </div>
+    </form>
+  </section>
+
+  <aside class="panel ai-config-side">
+    <h3>当前配置摘要</h3>
+    <ul class="ai-summary-list">
+      <li><strong>Provider:</strong> {{ config.provider }}</li>
+      <li><strong>Model:</strong> {{ config.model_name }}</li>
+      <li><strong>API Key:</strong> {{ api_key_masked }}</li>
+      <li><strong>更新时间:</strong> {{ config.updated_at|date:"Y-m-d H:i" }}</li>
+    </ul>
+
+    <h4>提示词建议</h4>
+    <ul class="ai-tip-list">
+      <li>明确输出格式：洞察/原因/行动/目标。</li>
+      <li>约束建议风格：短句、可执行、可量化。</li>
+      <li>加入你的预算策略和偏好。</li>
+    </ul>
+  </aside>
+</div>
+{% endblock %}

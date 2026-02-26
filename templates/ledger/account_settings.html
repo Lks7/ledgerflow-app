@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+{% block title %}账户设置{% endblock %}
+{% block content %}
+<div class="acc-page">
+  <div class="report-header">
+    <div>
+      <h2 class="page-title">🏦 账户设置</h2>
+      <p class="page-desc">复式记账四大账户类型：资产、负债、收入、支出，精准反映资金全貌。</p>
+    </div>
+    <a href="/journals/accounts/export/csv" class="btn-export">⬇️ 导出 CSV</a>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-error" style="margin-bottom:16px">⚠️ {{ error }}</div>
+  {% endif %}
+
+  <!-- 新增账户 -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">➕</span>
+      <h3 class="form-card-title">新增账户</h3>
+    </div>
+    <form method="post" action="/journals/accounts/create" class="acc-create-form">
+      {% csrf_token %}
+      <div class="acc-create-row">
+        <div class="form-group" style="flex:2;min-width:160px">
+          <label class="form-label-sm">账户名称</label>
+          <input name="name" placeholder="例：招商银行储蓄卡" required class="form-input" />
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px">
+          <label class="form-label-sm">类型</label>
+          <select name="type" class="form-input">
+            <option value="asset">💰 资产账户</option>
+            <option value="liability">💳 负债账户</option>
+            <option value="income">📈 收入账户</option>
+            <option value="expense">📉 支出账户</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:80px">
+          <label class="form-label-sm">币种</label>
+          <input name="currency" value="CNY" required class="form-input" />
+        </div>
+        <div class="form-group" style="flex:2;min-width:140px">
+          <label class="form-label-sm">备注/开户行</label>
+          <input name="note" placeholder="可选" class="form-input" />
+        </div>
+        <div class="form-group" style="min-width:80px">
+          <label class="form-label-sm">期初金额</label>
+          <input name="opening_balance" type="number" step="0.01" value="0" class="form-input" style="width:110px" />
+        </div>
+        <div class="form-group" style="padding-top:20px">
+          <button type="submit" class="btn-primary-lg" style="padding:10px 24px;font-size:14px">新增</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <div class="acc-tabs">
+    {% for group in account_groups %}
+    <button type="button" class="acc-tab-btn {% if forloop.first %}active{% endif %}"
+      onclick="switchAccTab('{{ group.type }}')" id="tab-btn-{{ group.type }}">
+      {{ group.icon }} {{ group.label }}
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- 四类账户分组 -->
+  {% for group in account_groups %}
+  <div class="form-card acc-tab-content {% if forloop.first %}active{% endif %}" id="tab-content-{{ group.type }}">
+    <div class="form-card-header">
+      <span class="form-card-icon">{{ group.icon }}</span>
+      <h3 class="form-card-title">{{ group.label }}</h3>
+      <span class="badge acc-badge-{{ group.type }}">{{ group.accounts|length }} 个</span>
+      <span class="acc-group-total">合计 <strong>¥{{ group.total }}</strong></span>
+      <span class="acc-group-desc">{{ group.desc }}</span>
+    </div>
+    {% if group.accounts %}
+    <div class="acc-table-wrap">
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>账户名称</th>
+            <th>当前余额</th>
+            <th>备注</th>
+            <th>状态</th>
+            <th style="min-width:120px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for account in group.accounts %}
+          <tr id="row-{{ account.id }}" class="{% if account.status == 'inactive' %}acc-row-inactive{% endif %}">
+            <td>
+              <strong>{{ account.name }}</strong>
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ account.currency|default:'CNY' }} | 使用 {{ account.usage_count|default:0 }} 次</div>
+            </td>
+            <td class="acc-num"><strong>{{ account.balance|default:'0.00' }}</strong></td>
+            <td style="color:#64748b">{{ account.note|default:'-' }}</td>
+            <td>
+              {% if account.status == 'active' %}
+              <span class="acc-status-badge acc-status-active">启用</span>
+              {% else %}
+              <span class="acc-status-badge acc-status-inactive">停用</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="acc-actions">
+                <button type="button" class="sl-action-btn btn-journal" onclick="openAccountModal('{{ account.id }}')">✏️ 编辑</button>
+              </div>
+            </td>
+          </tr>
+
+          <tr style="display:none;">
+            <td colspan="5" style="padding:0;border:0;">
+              <div id="account-modal-{{ account.id }}" class="acc-modal-mask" style="display:none;"
+                onclick="closeAccountModal('{{ account.id }}', event)">
+                <div class="acc-modal-card" onclick="event.stopPropagation()">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <div>
+                  <h3 style="margin:0;font-size:18px;">编辑账户：{{ account.name }}</h3>
+                  <div style="font-size:12px;color:#64748b;margin-top:4px;">当前余额 {{ account.balance|default:'0.00' }} {{ account.currency|default:'CNY' }}</div>
+                </div>
+                <button type="button" class="sl-action-btn btn-undo" onclick="closeAccountModal('{{ account.id }}')">关闭</button>
+              </div>
+
+              <form method="post" action="/journals/accounts/update" style="margin-bottom:14px;">
+                {% csrf_token %}
+                <input type="hidden" name="account_id" value="{{ account.id }}" />
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+                  <div class="form-group" style="min-width:160px;">
+                    <label class="form-label-sm">账户名称</label>
+                    <input name="name" value="{{ account.name }}" required class="form-input" />
+                  </div>
+                  <div class="form-group" style="min-width:140px;">
+                    <label class="form-label-sm">账户类型</label>
+                    <select name="type" class="form-input">
+                      <option value="asset" {% if account.type_is_asset %}selected{% endif %}>💰 资产账户</option>
+                      <option value="liability" {% if account.type_is_liability %}selected{% endif %}>💳 负债账户</option>
+                      <option value="income" {% if account.type_is_income %}selected{% endif %}>📈 收入账户</option>
+                      <option value="expense" {% if account.type_is_expense %}selected{% endif %}>📉 支出账户</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="width:90px;">
+                    <label class="form-label-sm">币种</label>
+                    <input name="currency" value="{{ account.currency|default:'CNY' }}" required class="form-input" />
+                  </div>
+                  <div class="form-group" style="min-width:200px;flex:1;">
+                    <label class="form-label-sm">备注</label>
+                    <input name="note" value="{{ account.note|default:'' }}" class="form-input" />
+                  </div>
+                  <button type="submit" class="btn-primary-lg" style="padding:9px 20px;font-size:13px">💾 保存资料</button>
+                </div>
+              </form>
+
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <form method="post" action="/journals/accounts/balance" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                  {% csrf_token %}
+                  <input type="hidden" name="account_id" value="{{ account.id }}" />
+                  <div class="form-group">
+                    <label class="form-label-sm">期初金额</label>
+                    <input name="opening_balance" type="number" step="0.01" value="{{ account.opening_balance|default:'0.00' }}"
+                      class="form-input" style="width:140px;" />
+                  </div>
+                  <button type="submit" class="sl-action-btn btn-done">更新期初</button>
+                </form>
+
+                <form method="post" action="/journals/accounts/status" style="display:flex;align-items:flex-end;gap:8px;">
+                  {% csrf_token %}
+                  <input type="hidden" name="account_id" value="{{ account.id }}" />
+                  {% if account.status == 'active' %}
+                  <input type="hidden" name="status" value="inactive" />
+                  <button type="submit" class="sl-action-btn btn-undo">停用账户</button>
+                  {% else %}
+                  <input type="hidden" name="status" value="active" />
+                  <button type="submit" class="sl-action-btn btn-done">启用账户</button>
+                  {% endif %}
+                </form>
+
+                <form method="post" action="/journals/accounts/delete" style="display:flex;align-items:flex-end;"
+                  onsubmit="return confirm('确认删除该账户？如有记账记录将删除失败。');">
+                  {% csrf_token %}
+                  <input type="hidden" name="account_id" value="{{ account.id }}" />
+                  {% if account.id in protected_ids %}
+                  <button type="button" class="sl-action-btn btn-delete" disabled title="系统账户不可删除">系统账户不可删</button>
+                  {% else %}
+                  <button type="submit" class="sl-action-btn btn-delete">🗑 删除账户</button>
+                  {% endif %}
+                </form>
+              </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="acc-empty">暂无{{ group.label }}，点上方「新增」创建</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <!-- 复式记账速查 -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📚</span>
+      <h3 class="form-card-title">复式记账原理速查</h3>
+    </div>
+    <div class="acc-theory-grid">
+      <div class="acc-theory-item acc-theory-asset">
+        <div class="acc-theory-head">💰 资产账户</div>
+        <div class="acc-theory-rule">借方增加 / 贷方减少</div>
+        <div class="acc-theory-eg">现金、银行卡、余额宝</div>
+      </div>
+      <div class="acc-theory-item acc-theory-liability">
+        <div class="acc-theory-head">💳 负债账户</div>
+        <div class="acc-theory-rule">贷方增加 / 借方减少</div>
+        <div class="acc-theory-eg">信用卡、花呗、贷款</div>
+      </div>
+      <div class="acc-theory-item acc-theory-income">
+        <div class="acc-theory-head">📈 收入账户</div>
+        <div class="acc-theory-rule">贷方增加 / 借方减少</div>
+        <div class="acc-theory-eg">工资、奖金、副业收入</div>
+      </div>
+      <div class="acc-theory-item acc-theory-expense">
+        <div class="acc-theory-head">📉 支出账户</div>
+        <div class="acc-theory-rule">借方增加 / 贷方减少</div>
+        <div class="acc-theory-eg">餐饮、交通、娱乐</div>
+      </div>
+    </div>
+    <div class="acc-theory-example">
+      <span class="acc-theory-example-label">📝 示例：信用卡刷卡买餐饮 ¥50</span>
+      <div class="acc-theory-entries">
+        <div class="acc-entry-row">
+          <span class="acc-dr">借：支出账户（餐饮）</span>
+          <span class="acc-amount">¥50.00</span>
+        </div>
+        <div class="acc-entry-row">
+          <span class="acc-cr">贷：负债账户（信用卡）</span>
+          <span class="acc-amount">¥50.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function switchAccTab(type) {
+    document.querySelectorAll('.acc-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.acc-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-btn-' + type).classList.add('active');
+    document.getElementById('tab-content-' + type).classList.add('active');
+  }
+
+  function openAccountModal(id) {
+    var m = document.getElementById('account-modal-' + id);
+    if (m) {
+      var holder = m.closest('tr');
+      if (holder) {
+        holder.style.display = 'table-row';
+      }
+      m.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeAccountModal(id, event) {
+    if (event && event.target !== event.currentTarget) {
+      return;
+    }
+    var m = document.getElementById('account-modal-' + id);
+    if (m) {
+      m.style.display = 'none';
+      var holder = m.closest('tr');
+      if (holder) {
+        holder.style.display = 'none';
+      }
+      document.body.style.overflow = '';
+    }
+  }
+</script>
+
+<style>
+  .acc-modal-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .acc-modal-card {
+    width: min(860px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    background: #ffffff;
+    border-radius: 14px;
+    border: 1px solid #dbe7de;
+    box-shadow: 0 20px 40px rgba(2, 6, 23, 0.22);
+    padding: 18px;
+  }
+</style>
+{% endblock %}

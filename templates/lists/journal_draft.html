@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}交易草稿{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>清单转交易草稿</h2>
+  <p>描述：{{ draft.description }}</p>
+  <p>建议金额：{{ draft.line_amount }}</p>
+  <p>来源：{{ draft.source }}</p>
+  <a href="/journals/new">前往新增记账并录入该草稿</a>
+</section>
+{% endblock %}

@@ -1,0 +1,206 @@
+{% extends 'base.html' %}
+{% block title %}编辑记账{% endblock %}
+{% block content %}
+<section class="journal-page" x-data="journalEditForm()">
+
+  <div class="page-header">
+    <div class="page-header-text">
+      <h2 class="page-title">✏️ 编辑记账</h2>
+      <span class="badge" style="margin-top: 8px; display: inline-block;">ID: {{ journal.id }}</span>
+    </div>
+    <div class="header-actions">
+      <a href="/journals/?month={{ month }}" class="btn-ghost">← 返回列表</a>
+    </div>
+  </div>
+
+  {% if error %}<div class="alert alert-error">⚠️ {{ error }}</div>{% endif %}
+
+  <form method="post" action="/journals/update">
+    {% csrf_token %}
+    <input type="hidden" name="month" value="{{ month }}" />
+    <input type="hidden" name="journal_id" value="{{ journal.id }}" />
+
+    <div class="journal-columns" style="grid-template-columns: 1fr; max-width: 800px; margin: 0 auto;">
+      <!-- Single Unified Form Card -->
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🔄</span>
+          <h3 class="form-card-title">修改记账信息</h3>
+        </div>
+
+        <div class="form-grid"
+          style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+          <div class="form-group">
+            <label class="form-label" for="je-date">📅 日期</label>
+            <input id="je-date" name="date" type="date" value="{{ journal.date }}" required class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="je-desc">💬 标题/说明 (必填)</label>
+            <input id="je-desc" name="description" value="{{ journal.description }}" required class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="je-tags">🏷️ 标签 (英文逗号分隔)</label>
+            <input id="je-tags" name="tags" value="{{ tags_str }}" class="form-input" />
+          </div>
+        </div>
+
+        <div class="transfer-list">
+          <div class="transfer-card">
+            <div class="transfer-body" style="flex-direction: column; gap: 1.5rem; align-items: flex-start;">
+              <div class="transfer-account" style="width: 100%;">
+                <label class="form-label-sm" style="margin-bottom: 0.5rem; display: block;">📤 从哪里出 (转出/支付账户)</label>
+                <div class="account-bubbles" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <template x-for="acc in accountRows" :key="acc.id">
+                    <button type="button" class="bubble-btn" :class="{ 'active': from_account_id == acc.id }"
+                      @click="from_account_id = acc.id" x-text="acc.name"></button>
+                  </template>
+                </div>
+                <input type="hidden" name="from_account_id" :value="from_account_id" required>
+              </div>
+
+              <div class="transfer-account" style="width: 100%;">
+                <label class="form-label-sm" style="margin-bottom: 0.5rem; display: block;">📥 到哪里去 (转入/收款/支出分类)</label>
+                <div class="account-bubbles" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <template x-for="acc in accountRows" :key="acc.id">
+                    <button type="button" class="bubble-btn" :class="{ 'active': to_account_id == acc.id }"
+                      @click="to_account_id = acc.id" x-text="acc.name"></button>
+                  </template>
+                </div>
+                <input type="hidden" name="to_account_id" :value="to_account_id" required>
+              </div>
+            </div>
+
+            <div class="transfer-details"
+              style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+
+              <div class="form-group-inline" style="flex: 1; min-width: 200px;">
+                <label class="form-label-sm">金额</label>
+                <input name="amount" type="number" min="0.01" step="0.01" x-model.number="amount" placeholder="0.00"
+                  class="form-input input-amount" style="font-size: 1.5rem; font-weight: bold; color: var(--primary);"
+                  required />
+              </div>
+
+              <div class="form-group-inline" style="flex: 1; min-width: 200px;">
+                <label class="form-label-sm">分类 (可选)</label>
+                <select name="category_id" x-model="category_id" class="form-select">
+                  <option value="">无分类…</option>
+                  {% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }}</option>{% endfor %}
+                </select>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top: 1.5rem;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label class="form-label" for="je-note">📝 详细备注</label>
+            <!-- Get the first transfer note or entry note -->
+            <textarea id="je-note" name="note" x-model="note" class="form-input" rows="2"
+              placeholder="记录更多细节..."></textarea>
+          </div>
+        </div>
+
+        <input type="hidden" name="currency" value="{{ default_currency }}" />
+        <input type="hidden" name="source" value="{{ journal.source|default:'manual' }}" />
+      </div>
+    </div>
+
+    <!-- ── Bottom Action Bar ── -->
+    <div class="action-bar" style="max-width: 800px; margin: 0 auto;">
+      <div class="action-buttons" style="width: 100%; justify-content: space-between;">
+        <a href="/journals/?month={{ month }}" class="btn-ghost">取消返回</a>
+        <button type="submit" class="btn-primary-lg">
+          💾 保存修改
+        </button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<style>
+  .bubble-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: var(--surface);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .bubble-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--surface-hover);
+  }
+
+  .bubble-btn.active {
+    background: #e0f2fe !important;
+    color: #0369a1 !important;
+    border-color: #0ea5e9 !important;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(14, 165, 233, 0.15);
+  }
+</style>
+
+<script>
+  function journalEditForm() {
+    const accountMap = {};
+    const accountRows = JSON.parse(document.getElementById('accounts-data').textContent);
+    accountRows.forEach((item) => { accountMap[item.id] = item; });
+
+    // Reverse engineering the simple transfer state from the db representation
+    const existingTransfers = JSON.parse(document.getElementById('transfers-data').textContent);
+    const existingEntries = JSON.parse(document.getElementById('entries-data').textContent);
+
+    let fromAcc = '', toAcc = '', amt = 0, cat = '', noteText = '';
+
+    // Simplest case: it was literally saved as a transfer
+    if (existingTransfers.length > 0) {
+      fromAcc = existingTransfers[0].from_account_id;
+      toAcc = existingTransfers[0].to_account_id;
+      amt = parseFloat(existingTransfers[0].amount);
+      noteText = existingTransfers[0].note;
+      // transfers don't normally have categories, but let's see if there's any entry with category 
+      // (sometimes the auto-generator creates them)
+      const catEntry = existingEntries.find(e => e.category_id);
+      if (catEntry) cat = catEntry.category_id;
+    }
+    // Otherwise, maybe it was saved as 2 entries
+    else if (existingEntries.length >= 2) {
+      // Find debit entry (money going IN / toAcc)
+      const debitEntry = existingEntries.find(e => parseFloat(e.debit) > 0);
+      // Find credit entry (money going OUT / fromAcc)
+      const creditEntry = existingEntries.find(e => parseFloat(e.credit) > 0);
+
+      if (debitEntry && creditEntry) {
+        toAcc = debitEntry.account_id;
+        fromAcc = creditEntry.account_id;
+        amt = parseFloat(debitEntry.debit);
+        cat = debitEntry.category_id || creditEntry.category_id || '';
+        noteText = debitEntry.note || creditEntry.note || '';
+      }
+    }
+
+    return {
+      accountRows,
+      accountMap,
+      from_account_id: fromAcc,
+      to_account_id: toAcc,
+      amount: amt || '',
+      category_id: cat,
+      note: noteText,
+      fromBalanceText() {
+        const account = this.accountMap[this.from_account_id];
+        if (!account) return '';
+        return `当前余额: ${account.balance || '0.00'} ${account.currency || 'CNY'}`;
+      }
+    };
+  }
+</script>
+{{ accounts|json_script:"accounts-data" }}
+{{ journal.transfers|json_script:"transfers-data" }}
+{{ journal.entries|json_script:"entries-data" }}
+{% endblock %}

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "food",
+    "name": "餐饮",
+    "group": "必要",
+    "budget_monthly": 2000
+  },
+  {
+    "id": "transport",
+    "name": "交通",
+    "group": "必要",
+    "budget_monthly": 800
+  },
+  {
+    "id": "shopping",
+    "name": "购物",
+    "group": "可选",
+    "budget_monthly": 1500
+  },
+  {
+    "id": "housing",
+    "name": "住房",
+    "group": "必要",
+    "budget_monthly": 4000
+  },
+  {
+    "id": "entertainment",
+    "name": "娱乐",
+    "group": "可选",
+    "budget_monthly": 1000
+  }
+]

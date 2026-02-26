@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}记账日志{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>记账日志</h2>
+  <p>每次新增/删除凭证都会写入日志。</p>
+  {% for log in logs %}
+  <article class="journal-item">
+    <div class="row spread">
+      <strong>{{ log.timestamp }} | {{ log.action }}</strong>
+      <span>{{ log.date }}</span>
+    </div>
+    <p>{{ log.description }}</p>
+    <ul>
+      {% for e in log.entries %}
+      <li>{{ e.account_id }} | 借 {{ e.debit }} | 贷 {{ e.credit }} | {{ e.currency|default:'CNY' }}</li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% empty %}
+  <p>暂无日志</p>
+  {% endfor %}
+</section>
+{% endblock %}

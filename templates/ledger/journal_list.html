@@ -1,0 +1,218 @@
+﻿{% extends 'base.html' %}
+{% block title %}交易明细{% endblock %}
+{% block content %}
+
+<div class="page-header" style="margin-bottom: 24px; animation: fadeInUp 0.35s ease-out;">
+  <div>
+    <h1 class="page-title">交易明细</h1>
+    <p class="page-desc">按月份和标签查看您的所有财务记录</p>
+  </div>
+  <a href="/journals/export/csv?month={{ month }}" class="btn-export"
+    style="background:#fff; box-shadow: 0 4px 10px rgba(0,0,0,0.04); border-color: #d1dfd9; color: var(--ink);">
+    <span style="margin-right: 6px; color: var(--brand);">⬇️</span> 导出 CSV
+  </a>
+</div>
+
+<div class="form-card" style="padding: 18px 24px; margin-bottom: 24px; animation: fadeInUp 0.4s ease-out;">
+  <form method="get" action="/journals/" class="row spread" style="align-items: flex-end;">
+    <div class="row" style="gap: 20px; flex: 1;">
+      <div class="form-group" style="width: 160px;">
+        <label class="form-label-sm">月份 (Month)</label>
+        <input type="month" name="month" class="form-input" value="{{ month }}"
+          style="background: #fafcfb; border: 1px solid #d8e4db;" />
+      </div>
+      <div class="form-group" style="width: 200px;">
+        <label class="form-label-sm">标签 (Tag)</label>
+        <select name="tag" class="form-select" style="background: #fafcfb; border: 1px solid #d8e4db;">
+          <option value="">所有标签</option>
+          {% for t in tags %}
+          <option value="{{ t }}" {% if tag == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn-primary"
+      style="padding: 10px 24px; border-radius: 10px; font-weight: 600; font-size: 14px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        style="vertical-align: text-bottom; margin-right: 6px; display: inline-block;">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      筛选记录
+    </button>
+  </form>
+</div>
+
+<div class="journal-list" style="display: flex; flex-direction: column; gap: 20px;">
+  {% for j in journals %}
+  <article class="form-card journal-card"
+    style="padding: 0; overflow: hidden; margin-bottom:0; animation: fadeInUp 0.5s ease-out;">
+    <!-- 卡片头部 -->
+    <div
+      style="background: linear-gradient(135deg, #fbfffb, #f3faf5); border-bottom: 1px solid var(--line); padding: 18px 24px; position: relative;">
+      <div class="row spread">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <h3 style="margin: 0; font-size: 17px; color: var(--ink); font-weight: 800; letter-spacing: -0.3px;">{{ j.description }}</h3>
+          <span
+            style="color: var(--muted); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            {{ j.date }}
+          </span>
+        </div>
+        <div class="row" style="gap: 8px;">
+          <a href="/journals/edit/{{ month }}/{{ j.id }}" class="btn-ghost btn-sm"
+            style="padding: 7px 12px; background: #fff;">
+            ✏️ 编辑
+          </a>
+          <form method="post" action="/journals/delete" style="margin: 0;" onsubmit="return confirm('确定要删除这条明细吗？');">
+            {% csrf_token %}
+            <input type="hidden" name="month" value="{{ month }}" />
+            <input type="hidden" name="journal_id" value="{{ j.id }}" />
+            <button type="submit" class="btn-ghost-danger btn-sm"
+              style="padding: 7px 12px; border-radius: 8px; cursor: pointer; background: #fff; border: 1px solid #fee2e2;">
+              🗑️ 删除
+            </button>
+          </form>
+        </div>
+      </div>
+      {% if j.tags %}
+      <div class="tag-row" style="margin-top: 14px; margin-bottom: 0;">
+        {% for t in j.tags %}
+        <a class="pill clickable" href="/journals/?month={{ month }}&tag={{ t|urlencode }}">#{{ t }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 卡片主体: 流向与明细 -->
+    <div style="padding: 20px 24px;">
+      {% if j.transfers %}
+      <div class="transfer-list" style="margin-bottom: 20px;">
+        {% for f in j.transfers %}
+        <div class="flow-item"
+          style="background: #fafdfa; border-color: #e2ede5; box-shadow: 0 4px 12px rgba(46, 125, 79, 0.03); padding: 12px 16px; border-radius: 12px;">
+          <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
+            <span style="font-weight: 600; color: var(--ink); font-size: 14px;">{{ f.from_name }}</span>
+            <div
+              style="height: 1px; flex: 1; background: repeating-linear-gradient(to right, #ccdfd4 0, #ccdfd4 4px, transparent 4px, transparent 8px); margin: 0 10px; max-width: 40px;">
+            </div>
+            <span class="arrow" style="color: var(--brand); font-weight: 800; font-size: 14px;">➔</span>
+            <div
+              style="height: 1px; flex: 1; background: repeating-linear-gradient(to right, #ccdfd4 0, #ccdfd4 4px, transparent 4px, transparent 8px); margin: 0 10px; max-width: 40px;">
+            </div>
+            <span style="font-weight: 600; color: var(--ink); font-size: 14px;">{{ f.to_name }}</span>
+          </div>
+          <div style="text-align: right;">
+            <strong class="input-amount" style="font-size: 18px; color: var(--ink);">{{ f.amount }}</strong>
+            <span style="color: var(--brand); font-size: 12px; margin-left: 4px; font-weight: 700;">{{ f.display_currency }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="table-wrap"
+        style="border: 1px solid #eef4f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.01);">
+        <table class="simple-table" style="margin: 0; font-size: 13px;">
+          <thead style="background: #f8fbf9;">
+            <tr>
+              <th
+                style="color: var(--muted); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid #e5ede7; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">
+                账户 / 借贷方</th>
+              <th
+                style="color: var(--muted); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid #e5ede7; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">
+                分类 (Category)</th>
+              <th
+                style="color: var(--muted); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid #e5ede7; text-align: right; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">
+                借方 (Debit)</th>
+              <th
+                style="color: var(--muted); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid #e5ede7; text-align: right; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">
+                贷方 (Credit)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in j.entries %}
+            <tr style="transition: background 0.15s ease;" onmouseover="this.style.background='#fdfefd'"
+              onmouseout="this.style.background='transparent'">
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f4f8f5;">
+                <span style="font-weight: 600; color: var(--ink);">{{ e.account_name }}</span>
+              </td>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f4f8f5; color: var(--muted);">
+                {{ e.category_id|default:'<span style="opacity:0.3">-</span>'|safe }}
+              </td>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f4f8f5; text-align: right;">
+                {% if e.debit_amount > 0 %}
+                <span class="input-debit" style="background:#eef7f2; padding: 2px 8px; border-radius: 6px;">{{ e.currency|default:'CNY' }} {{ e.debit }}</span>
+                {% else %}
+                <span style="color: #cbd5e1;">-</span>
+                {% endif %}
+              </td>
+              <td style="padding: 12px 16px; border-bottom: 1px solid #f4f8f5; text-align: right;">
+                {% if e.credit_amount > 0 %}
+                <span class="input-credit" style="background:#fff3e0; padding: 2px 8px; border-radius: 6px;">{{ e.currency|default:'CNY' }} {{ e.credit }}</span>
+                {% else %}
+                <span style="color: #cbd5e1;">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <details class="meta-editor" style="margin-top: 16px; padding-top: 12px;">
+        <summary
+          style="color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; transition: background 0.2s;"
+          onmouseover="this.style.background='#f0f4f1'" onmouseout="this.style.background='transparent'">
+          <span>⚙️ 修改底层分类与标签</span>
+        </summary>
+        <form method="post" action="/journals/update-metadata" class="row"
+          style="margin-top: 12px; background: #fdfefd; padding: 16px; border-radius: 12px; border: 1px solid #e2ede5; box-shadow: inset 0 2px 4px rgba(0,0,0,0.01);">
+          {% csrf_token %}
+          <input type="hidden" name="month" value="{{ month }}" />
+          <input type="hidden" name="journal_id" value="{{ j.id }}" />
+          <div class="form-group flex-fill" style="min-width: 150px;">
+            <label class="form-label-sm">主分类设定</label>
+            <select name="category_id" class="form-select" style="padding: 8px 12px; font-size: 13px;">
+              <option value="">无分类</option>
+              {% for cat in categories %}
+              <option value="{{ cat.id }}" {% if j.primary_category_id == cat.id %}selected{% endif %}>{{ cat.name }}
+
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group flex-fill" style="min-width: 200px;">
+            <label class="form-label-sm">附加标签 (逗号分隔)</label>
+            <input name="tags" class="form-input" style="padding: 8px 12px; font-size: 13px;" value="{{ j.tags_str }}"
+              placeholder="如: 餐饮, 通勤" />
+          </div>
+          <div style="align-self: flex-end;">
+            <button type="submit" class="btn-secondary"
+              style="padding: 9px 16px; font-size: 13px; font-weight: 600;">保存修改</button>
+          </div>
+        </form>
+      </details>
+
+    </div>
+  </article>
+  {% empty %}
+  <div class="form-card"
+    style="text-align: center; padding: 80px 20px; border: 2px dashed #d5e3d9; background: #fafcfb; border-radius: 16px;">
+    <div style="font-size: 56px; margin-bottom: 20px; opacity: 0.6; animation: fadeInUp 0.5s ease-out;">📭</div>
+    <h3 style="margin: 0 0 10px; color: var(--ink); font-size: 20px;">暂无交易记录</h3>
+    <p style="color: var(--muted); margin: 0 0 24px; font-size: 15px;">当前所选月份或标签下没有找到相关的记账明细。</p>
+    <a href="/journals/new" class="btn-primary"
+      style="display: inline-block; text-decoration: none; padding: 12px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(46, 125, 79, 0.25);">
+      ✨ 添加第一笔账目
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

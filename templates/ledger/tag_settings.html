@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}标签管理{% endblock %}
+{% block content %}
+<section class="panel">
+    <h2>标签管理</h2>
+    <p class="muted">查看所有标签的使用频率，支持重命名或删除。删除不会影响记账数据，仅移除该标签标记。</p>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    {% if tags %}
+    <div class="table-wrap" style="margin-top:14px">
+        <table class="simple-table">
+            <thead>
+                <tr>
+                    <th>标签</th>
+                    <th>使用次数</th>
+                    <th>重命名</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in tags %}
+                <tr>
+                    <td>
+                        <a class="pill clickable" href="/journals/?tag={{ item.tag|urlencode }}">#{{ item.tag }}</a>
+                    </td>
+                    <td>{{ item.count }}</td>
+                    <td>
+                        <form method="post" action="/journals/tags/rename" class="inline-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="old_tag" value="{{ item.tag }}" />
+                            <input name="new_tag" value="{{ item.tag }}" style="width:120px" />
+                            <button type="submit">重命名</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" action="/journals/tags/delete" class="inline-form"
+                            onsubmit="return confirm('确认删除标签「{{ item.tag }}」？这会从 {{ item.count }} 条记录中移除该标签。')">
+                            {% csrf_token %}
+                            <input type="hidden" name="tag" value="{{ item.tag }}" />
+                            <button type="submit"
+                                style="background:#fef2f2;color:var(--danger);border-color:#fca5a5">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:40px 0;color:var(--muted)">
+        <p style="font-size:36px;margin:0">🏷️</p>
+        <p>暂无标签，去新增记账时添加标签吧。</p>
+        <a href="/journals/new"
+            style="display:inline-block;margin-top:10px;padding:8px 16px;background:var(--brand-soft);color:var(--brand);border-radius:8px;text-decoration:none;border:1px solid #cbe7d4">→
+            新增记账</a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

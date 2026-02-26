@@ -1,0 +1,398 @@
+{% extends 'base.html' %}
+{% block title %}购物清单{% endblock %}
+{% block content %}
+<div class="sl-page">
+
+  <!-- ══ 页头 ══ -->
+  <div class="sl-header">
+    <div>
+      <h2 class="page-title">🛒 购物清单</h2>
+      <p class="page-desc">管理购物需求，让每个商品都记录预算价、实际价和差额。</p>
+    </div>
+    <div class="sl-summary-chips">
+      <div class="sl-chip sl-chip-count">
+        <span class="sl-chip-icon">📦</span>
+        <span>待购 <strong>{{ summary.count }}</strong> 件</span>
+      </div>
+      <div class="sl-chip sl-chip-budget">
+        <span class="sl-chip-icon">💰</span>
+        <span>待购预算合计 <strong>¥{{ summary.total_budget }}</strong></span>
+      </div>
+      <div class="sl-chip sl-chip-budget">
+        <span class="sl-chip-icon">🧾</span>
+        <span>待购实际合计 <strong>¥{{ summary.total_actual|default:'0.00' }}</strong></span>
+      </div>
+      <div class="sl-chip sl-chip-budget">
+        <span class="sl-chip-icon">📉</span>
+        <span>待购总差额 <strong>{% if summary.variance >= 0 %}+{% endif %}¥{{ summary.variance|default:'0.00' }}</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 快捷添加栏 ══ -->
+  <div class="sl-quickadd-wrap">
+    <form method="post" action="/lists/create" class="sl-quickadd" id="quickadd-form">
+      {% csrf_token %}
+      <div class="sl-qa-main">
+        <input id="qa-name" name="name" placeholder="＋ 快速添加商品，按 Enter 保存…" required autocomplete="off"
+          class="sl-qa-input" />
+        <button type="submit" class="sl-qa-btn">添加</button>
+      </div>
+      <div class="sl-qa-extra" id="qa-extra">
+        <div class="sl-qa-field">
+          <label class="form-label-sm">数量</label>
+          <input name="qty" type="number" min="1" value="1" class="form-input sl-qa-num" />
+        </div>
+        <div class="sl-qa-field">
+          <label class="form-label-sm">预算单价</label>
+          <input name="est_price" type="number" min="0" step="0.01" placeholder="0.00" class="form-input sl-qa-price" />
+        </div>
+        <div class="sl-qa-field">
+          <label class="form-label-sm">实际购买单价</label>
+          <input name="actual_price" type="number" min="0" step="0.01" placeholder="0.00" class="form-input sl-qa-price" />
+        </div>
+        <div class="sl-qa-field">
+          <label class="form-label-sm">优先级</label>
+          <div class="sl-priority-toggle" id="priority-toggle">
+            <button type="button" class="sl-prio-btn" data-val="low">低</button>
+            <button type="button" class="sl-prio-btn sl-prio-active" data-val="normal">中</button>
+            <button type="button" class="sl-prio-btn" data-val="high">高</button>
+          </div>
+          <input type="hidden" name="priority" id="qa-priority" value="normal" />
+        </div>
+        <div class="sl-qa-field">
+          <label class="form-label-sm">计划日期</label>
+          <input name="planned_date" type="date" value="{{ today }}" class="form-input sl-qa-date" />
+        </div>
+        <div class="sl-qa-field">
+          <label class="form-label-sm">购物平台</label>
+          <input name="platform" placeholder="如：淘宝 / 京东 / 线下超市" class="form-input" />
+        </div>
+        <div class="sl-qa-field sl-qa-note">
+          <label class="form-label-sm">备注</label>
+          <input name="note" placeholder="选填" class="form-input" />
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- ══ 双栏布局 ══ -->
+  <div class="sl-body">
+
+    <!-- 左：清单 -->
+    <div class="sl-list-col">
+
+      <!-- 状态过滤 Tab -->
+      <div class="sl-tabs">
+        <a href="/lists/" class="sl-tab {% if not status %}sl-tab-active{% endif %}">全部</a>
+        <a href="/lists/?status=pending" class="sl-tab {% if status == 'pending' %}sl-tab-active{% endif %}">待购</a>
+        <a href="/lists/?status=done" class="sl-tab {% if status == 'done' %}sl-tab-active{% endif %}">已购</a>
+      </div>
+
+      <!-- 清单卡片 -->
+      <div class="sl-items">
+        {% for item in items %}
+        <div class="sl-card {% if item.status == 'done' %}sl-card-done{% endif %}">
+          <div class="sl-card-prio prio-{{ item.priority }}"></div>
+          <div class="sl-card-body">
+            <div class="sl-card-top">
+              <div class="sl-card-name">
+                {% if item.status == 'done' %}<s>{% endif %}
+                  {{ item.name }}
+                  {% if item.status == 'done' %}</s>{% endif %}
+                <span class="sl-prio-badge prio-badge-{{ item.priority }}">{{ item.priority|default:"normal" }}</span>
+              </div>
+              <div class="sl-card-price">
+                预算单价 ¥{{ item.est_price|floatformat:2 }} / 实际单价 ¥{{ item.actual_price|floatformat:2 }} / 数量 {{ item.qty }}
+              </div>
+            </div>
+            <div class="sl-card-date">
+              预算总额 ¥{{ item.budget_total|floatformat:2 }} / 实际总额 ¥{{ item.actual_total|floatformat:2 }} /
+              差额
+              <strong style="color:{% if item.variance_total > 0 %}#dc2626{% elif item.variance_total < 0 %}#16a34a{% else %}#64748b{% endif %}">
+                {% if item.variance_total > 0 %}+{% endif %}¥{{ item.variance_total|floatformat:2 }}
+              </strong>
+            </div>
+            {% if item.note %}
+            <div class="sl-card-note">{{ item.note }}</div>
+            {% endif %}
+            {% if item.planned_date %}
+            <div class="sl-card-date">📅 {{ item.planned_date }}</div>
+            {% endif %}
+            {% if item.platform %}
+            <div class="sl-card-date">🛍 平台：{{ item.platform }}</div>
+            {% endif %}
+            <div class="sl-card-actions">
+              {% if item.status != 'done' %}
+              <form method="post" action="/lists/status" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}" />
+                <input type="hidden" name="status" value="done" />
+                <button type="submit" class="sl-action-btn btn-done">✓ 已购</button>
+              </form>
+              <a href="/lists/to-journal-draft?item_id={{ item.id }}" class="sl-action-btn btn-journal">🏦 转记账</a>
+              {% else %}
+              <form method="post" action="/lists/status" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}" />
+                <input type="hidden" name="status" value="pending" />
+                <button type="submit" class="sl-action-btn btn-undo">↩ 撤回</button>
+              </form>
+              {% endif %}
+              <button type="button" class="sl-action-btn btn-journal" onclick="openEditModal('{{ item.id }}')">✏️ 编辑</button>
+              <form method="post" action="/lists/delete" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="item_id" value="{{ item.id }}" />
+                <button type="submit" class="sl-action-btn btn-delete"
+                  onclick="return confirm('确认删除「{{ item.name }}」？')">🗑 删除</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div id="edit-modal-{{ item.id }}" class="sl-modal-mask" style="display:none" onclick="closeEditModal('{{ item.id }}', event)">
+          <div class="sl-modal-card" onclick="event.stopPropagation()">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <h3 style="margin:0;font-size:18px;color:#0f172a;">编辑清单项</h3>
+              <button type="button" class="sl-action-btn btn-undo" onclick="closeEditModal('{{ item.id }}')">关闭</button>
+            </div>
+
+            <form method="post" action="/lists/update">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}" />
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;">
+                <div>
+                  <label class="form-label-sm">商品名称</label>
+                  <input name="name" value="{{ item.name }}" required class="form-input" />
+                </div>
+                <div>
+                  <label class="form-label-sm">数量</label>
+                  <input name="qty" type="number" min="1" value="{{ item.qty }}" class="form-input" />
+                </div>
+                <div>
+                  <label class="form-label-sm">预算单价</label>
+                  <input name="est_price" type="number" min="0" step="0.01" value="{{ item.est_price|floatformat:2 }}" class="form-input" />
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;">
+                <div>
+                  <label class="form-label-sm">实际购买单价</label>
+                  <input name="actual_price" type="number" min="0" step="0.01" value="{{ item.actual_price|floatformat:2 }}" class="form-input" />
+                </div>
+                <div>
+                  <label class="form-label-sm">预算总额</label>
+                  <input type="text" value="¥{{ item.budget_total|floatformat:2 }}" class="form-input" readonly />
+                </div>
+                <div>
+                  <label class="form-label-sm">差额</label>
+                  <input type="text" value="{% if item.variance_total > 0 %}+{% endif %}¥{{ item.variance_total|floatformat:2 }}" class="form-input" readonly />
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;margin-top:10px;">
+                <div>
+                  <label class="form-label-sm">优先级</label>
+                  <select name="priority" class="form-input">
+                    <option value="low" {% if item.priority == 'low' %}selected{% endif %}>低</option>
+                    <option value="normal" {% if item.priority == 'normal' %}selected{% endif %}>中</option>
+                    <option value="high" {% if item.priority == 'high' %}selected{% endif %}>高</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label-sm">计划日期</label>
+                  <input name="planned_date" type="date" value="{{ item.planned_date }}" class="form-input" />
+                </div>
+                <div>
+                  <label class="form-label-sm">购物平台</label>
+                  <input name="platform" value="{{ item.platform|default:'' }}" placeholder="如：淘宝 / 京东 / 线下超市" class="form-input" />
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <label class="form-label-sm">备注</label>
+                <input name="note" value="{{ item.note|default:'' }}" class="form-input" />
+              </div>
+
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button type="button" class="sl-action-btn btn-undo" onclick="closeEditModal('{{ item.id }}')">取消</button>
+                <button type="submit" class="btn-primary-lg" style="padding:8px 18px;font-size:13px;">保存修改</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <div class="sl-empty">
+          <div class="sl-empty-icon">🛒</div>
+          <div>清单为空</div>
+          <div class="sl-empty-sub">在上方输入框快捷添加购物需求</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 右：AI 分析面板 -->
+    <div class="sl-ai-col">
+      <div class="form-card sl-ai-panel">
+        <div class="form-card-header">
+          <span class="form-card-icon">🤖</span>
+          <h3 class="form-card-title">AI 购买建议</h3>
+        </div>
+        <p class="sl-ai-desc">点击分析按钮，AI 将评估清单中每项商品的购买必要性，帮你做出更理性的消费决策。</p>
+        <button class="btn-primary-lg sl-ai-trigger" id="ai-analyze-btn" onclick="runAIAnalyze()">
+          <span id="ai-btn-text">✨ 开始 AI 分析</span>
+          <svg id="ai-spinner" style="display:none" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="spin-anim">
+            <line x1="12" y1="2" x2="12" y2="6" />
+            <line x1="12" y1="18" x2="12" y2="22" />
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+            <line x1="2" y1="12" x2="6" y2="12" />
+            <line x1="18" y1="12" x2="22" y2="12" />
+            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+          </svg>
+        </button>
+
+        <div id="ai-result" style="display:none">
+          <div id="ai-summary-box" class="ai-insight" style="margin-top:18px"></div>
+          <div id="ai-items-list" style="margin-top:14px"></div>
+          <div id="ai-footer" class="ai-footer" style="margin-top:10px"></div>
+        </div>
+        <div id="ai-error" class="alert alert-error" style="display:none;margin-top:14px"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Quick-add 优先级切换 ──
+  document.querySelectorAll('.sl-prio-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sl-prio-btn').forEach(b => b.classList.remove('sl-prio-active'));
+      btn.classList.add('sl-prio-active');
+      document.getElementById('qa-priority').value = btn.dataset.val;
+    });
+  });
+
+  // ── Enter 聚焦时展开详情栏 ──
+  document.getElementById('qa-name').addEventListener('focus', () => {
+    document.getElementById('qa-extra').classList.add('qa-extra-visible');
+  });
+
+  // ── AI 分析 ──
+  async function runAIAnalyze() {
+    const btn = document.getElementById('ai-analyze-btn');
+    const btnText = document.getElementById('ai-btn-text');
+    const spinner = document.getElementById('ai-spinner');
+    const resultDiv = document.getElementById('ai-result');
+    const errorDiv = document.getElementById('ai-error');
+
+    btn.disabled = true;
+    btnText.textContent = '分析中…';
+    spinner.style.display = 'inline-block';
+    resultDiv.style.display = 'none';
+    errorDiv.style.display = 'none';
+
+    try {
+      const resp = await fetch('/lists/ai-analyze');
+      if (!resp.ok) throw new Error('请求失败');
+      const data = await resp.json();
+
+      // Map item IDs to names from the DOM
+      const nameMap = {};
+      document.querySelectorAll('.sl-card').forEach(card => {
+        const idInput = card.querySelector('input[name="item_id"]');
+        const nameEl = card.querySelector('.sl-card-name');
+        if (idInput && nameEl) {
+          nameMap[idInput.value] = nameEl.textContent.replace(/低|中|高/g, '').trim();
+        }
+      });
+
+      // Render summary
+      const summaryBox = document.getElementById('ai-summary-box');
+      summaryBox.innerHTML = `<div class="ai-insight-label">💡 总结建议</div><div class="ai-insight-text">${data.summary || '—'}</div>`;
+
+      // Render item verdicts
+      const verdictColor = { '必要': '#16a34a', '可选': '#d97706', '建议跳过': '#dc2626' };
+      const verdictBg = { '必要': '#f0fdf4', '可选': '#fffbeb', '建议跳过': '#fef2f2' };
+      const verdictBorder = { '必要': '#bbf7d0', '可选': '#fde68a', '建议跳过': '#fecaca' };
+      const verdictIcon = { '必要': '✅', '可选': '🟡', '建议跳过': '⛔' };
+
+      const itemsList = document.getElementById('ai-items-list');
+      if (data.items && data.items.length > 0) {
+        itemsList.innerHTML = data.items.map(item => {
+          const name = nameMap[item.id] || item.id;
+          const color = verdictColor[item.verdict] || '#475569';
+          const bg = verdictBg[item.verdict] || '#f8fafc';
+          const border = verdictBorder[item.verdict] || '#e2e8f0';
+          const icon = verdictIcon[item.verdict] || '•';
+          return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 12px;background:${bg};border:1px solid ${border};border-radius:10px;margin-bottom:8px;">
+            <span style="font-size:18px;flex-shrink:0">${icon}</span>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:14px;color:#1e293b">${name}</div>
+              <div style="font-size:12px;color:${color};font-weight:600;margin:2px 0">${item.verdict}</div>
+              <div style="font-size:13px;color:#64748b">${item.reason || ''}</div>
+            </div>
+            <div style="font-size:11px;font-weight:700;color:${color};background:${border};padding:3px 7px;border-radius:20px;flex-shrink:0">${item.score || ''}/10</div>
+          </div>`;
+        }).join('');
+      } else {
+        itemsList.innerHTML = '<p style="color:#94a3b8;text-align:center;font-size:13px">待购清单为空，无需分析。</p>';
+      }
+
+      const modeTag = data.mode === 'gemini' ? '<span style="color:#7c3aed;font-weight:600">Gemini AI</span>' : '<span style="color:#0369a1">规则分析</span>';
+      document.getElementById('ai-footer').innerHTML = `${modeTag} · 生成于 ${data.generated_at || ''}`;
+      resultDiv.style.display = 'block';
+    } catch (e) {
+      errorDiv.textContent = '分析失败，请稍后重试。';
+      errorDiv.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = '✨ 重新分析';
+      spinner.style.display = 'none';
+    }
+  }
+
+  function openEditModal(id) {
+    var m = document.getElementById('edit-modal-' + id);
+    if (m) {
+      m.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeEditModal(id, event) {
+    if (event && event.target !== event.currentTarget) return;
+    var m = document.getElementById('edit-modal-' + id);
+    if (m) {
+      m.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  }
+</script>
+
+<style>
+  .sl-modal-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1200;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .sl-modal-card {
+    width: min(720px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #dbe7de;
+    border-radius: 14px;
+    box-shadow: 0 20px 40px rgba(2, 6, 23, 0.2);
+    padding: 16px;
+  }
+</style>
+{% endblock %}

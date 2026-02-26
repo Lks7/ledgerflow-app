@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% block title %}仪表盘{% endblock %}
+{% block content %}
+
+<!-- 页头区 -->
+<div class="page-header" style="margin-bottom: 24px; animation: fadeInUp 0.35s ease-out;">
+  <div>
+    <h1 class="page-title">仪表盘</h1>
+    <p class="page-desc">欢迎回来，这是您的财务概览与核心指标（{{ summary.period_label|default:'本月' }}）。</p>
+  </div>
+  <a href="/journals/new" class="btn-primary"
+    style="display: inline-flex; align-items: center; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none;">
+    <span style="font-size: 18px; margin-right: 6px;">✨</span> 记一笔
+  </a>
+</div>
+
+<div class="sl-tabs" style="margin-bottom: 16px;">
+  <a href="/?period=day" class="sl-tab {% if period == 'day' %}sl-tab-active{% endif %}">日</a>
+  <a href="/?period=week" class="sl-tab {% if period == 'week' %}sl-tab-active{% endif %}">周</a>
+  <a href="/?period=month" class="sl-tab {% if period == 'month' %}sl-tab-active{% endif %}">月</a>
+  <a href="/?period=year" class="sl-tab {% if period == 'year' %}sl-tab-active{% endif %}">年</a>
+</div>
+
+<!-- 核心数据卡片区 -->
+<section
+  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+
+  <!-- 收入 -->
+  <div class="form-card"
+    style="padding: 20px 24px; margin: 0; animation: fadeInUp 0.4s ease-out; background: linear-gradient(145deg, #f3faf5, #ffffff); border: 1px solid #ddecde; position: relative; overflow: hidden;">
+    <div style="position: absolute; right: -15px; top: -15px; font-size: 80px; opacity: 0.15; filter: grayscale(50%);">
+      📈</div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; position: relative;">
+      <span
+        style="display: inline-flex; justify-content: center; align-items: center; width: 28px; height: 28px; background: #e3f2e8; color: #1f7a43; border-radius: 8px; font-size: 14px;">⬇️</span>
+      <h3 style="margin: 0; font-size: 15px; color: var(--muted); font-weight: 600;">{{ summary.period_label|default:'本月' }}收入 (Income)</h3>
+    </div>
+    <p class="input-amount"
+      style="margin: 0; font-size: 32px; color: #1f7a43; font-weight: 800; letter-spacing: -0.5px; position: relative;">
+      <span style="font-size: 20px; margin-right: 2px;">¥</span>{{ summary.income|default:'0.00' }}
+    </p>
+  </div>
+
+  <!-- 支出 -->
+  <div class="form-card"
+    style="padding: 20px 24px; margin: 0; animation: fadeInUp 0.45s ease-out; background: linear-gradient(145deg, #fef4f4, #ffffff); border: 1px solid #fae1e1; position: relative; overflow: hidden;">
+    <div style="position: absolute; right: -15px; top: -15px; font-size: 80px; opacity: 0.1; filter: grayscale(50%);">💸
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; position: relative;">
+      <span
+        style="display: inline-flex; justify-content: center; align-items: center; width: 28px; height: 28px; background: #fcebeb; color: #d32f2f; border-radius: 8px; font-size: 14px;">⬆️</span>
+      <h3 style="margin: 0; font-size: 15px; color: var(--muted); font-weight: 600;">{{ summary.period_label|default:'本月' }}支出 (Expense)</h3>
+    </div>
+    <p class="input-amount"
+      style="margin: 0; font-size: 32px; color: #d32f2f; font-weight: 800; letter-spacing: -0.5px; position: relative;">
+      <span style="font-size: 20px; margin-right: 2px;">¥</span>{{ summary.expense|default:'0.00' }}
+    </p>
+  </div>
+
+  <!-- 净额 -->
+  <div class="form-card"
+    style="padding: 20px 24px; margin: 0; animation: fadeInUp 0.5s ease-out; background: linear-gradient(145deg, #f0f7fb, #ffffff); border: 1px solid #e1eff8; position: relative; overflow: hidden;">
+    <div style="position: absolute; right: -15px; top: -15px; font-size: 80px; opacity: 0.15; filter: grayscale(50%);">
+      ⚖️</div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; position: relative;">
+      <span
+        style="display: inline-flex; justify-content: center; align-items: center; width: 28px; height: 28px; background: #e6f2fa; color: #0288d1; border-radius: 8px; font-size: 14px;">=</span>
+      <h3 style="margin: 0; font-size: 15px; color: var(--muted); font-weight: 600;">{{ summary.period_label|default:'本月' }}结余 (Net Cash)</h3>
+    </div>
+    <p class="input-amount"
+      style="margin: 0; font-size: 32px; color: #0288d1; font-weight: 800; letter-spacing: -0.5px; position: relative;">
+      <span style="font-size: 20px; margin-right: 2px;">¥</span>{{ summary.net|default:'0.00' }}
+    </p>
+  </div>
+
+  <!-- 交易数 -->
+  <div class="form-card"
+    style="padding: 20px 24px; margin: 0; animation: fadeInUp 0.55s ease-out; background: linear-gradient(145deg, #f9fbf9, #ffffff); border: 1px solid #ebeeed; position: relative; overflow: hidden;">
+    <div style="position: absolute; right: -15px; top: -15px; font-size: 80px; opacity: 0.1; filter: grayscale(50%);">📝
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; position: relative;">
+      <span
+        style="display: inline-flex; justify-content: center; align-items: center; width: 28px; height: 28px; background: #edf2f0; color: #5a7062; border-radius: 8px; font-size: 14px;">#</span>
+      <h3 style="margin: 0; font-size: 15px; color: var(--muted); font-weight: 600;">{{ summary.period_label|default:'本月' }}交易数 (Tx Count)</h3>
+    </div>
+    <div style="display: flex; align-items: baseline; position: relative;">
+      <p class="input-amount"
+        style="margin: 0; font-size: 32px; color: var(--ink); font-weight: 800; letter-spacing: -0.5px;">
+        {{ summary.journal_count|default:'0' }}
+      </p>
+      <span style="color: var(--muted); font-size: 14px; margin-left: 6px; font-weight: 600;">笔</span>
+    </div>
+  </div>
+
+</section>
+
+<!-- 两栏功能区 -->
+<section class="journal-columns" style="animation: fadeInUp 0.6s ease-out;">
+
+  <!-- 左栏：TOP分类 -->
+  <div class="form-card" style="margin-bottom: 0;">
+    <div class="form-card-header" style="margin-bottom: 16px;">
+      <div class="form-card-icon"
+        style="background:#fff3e0; width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; border: 1px solid #ffe8cc;">
+        🔥
+      </div>
+      <div>
+        <h3 class="form-card-title">{{ summary.period_label|default:'本月' }} TOP 消费分类</h3>
+        <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">各项支出的排行榜单</p>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      {% for item in summary.top_categories %}
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #fafdfb; border: 1px solid #eef4f0; border-radius: 10px; transition: all 0.2s ease;"
+        onmouseover="this.style.background='#f4f9f6'" onmouseout="this.style.background='#fafdfb'">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div
+            style="width: 32px; height: 32px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 12px;">
+            {{ forloop.counter }}
+          </div>
+          <span style="font-weight: 600; color: var(--ink); font-size: 15px;">{{ item.category_id }}</span>
+        </div>
+        <div style="text-align: right;">
+          <strong class="input-amount" style="font-size: 16px; color: var(--ink);">{{ item.amount }}</strong>
+          <span style="color: var(--muted); font-size: 12px; margin-left: 2px;">CNY</span>
+        </div>
+      </div>
+      {% empty %}
+      <div
+        style="text-align: center; padding: 40px 0; color: var(--muted); background: #fafcfb; border-radius: 10px; border: 1px dashed #ddecde;">
+        <span style="font-size: 32px; opacity: 0.5;">📉</span>
+        <p style="margin: 10px 0 0; font-size: 14px; font-weight: 500;">本月暂无消费数据可供排行</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 右栏：AI 消费建议 -->
+  <div class="form-card" style="margin-bottom: 0;">
+    <div class="form-card-header" style="margin-bottom: 16px;">
+      <div class="form-card-icon"
+        style="background:#eaf2fe; width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; border: 1px solid #d4e4fd;">
+        🤖
+      </div>
+      <div style="flex: 1;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 class="form-card-title">AI 消费建议</h3>
+          <span class="badge" style="background: #eef7f1; color: #1e7040; border: 1px solid #c8dbd0; font-size: 11px;">
+            {{ advice.mode|upper }}
+          </span>
+        </div>
+        <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">随身的人工智能财务顾问</p>
+      </div>
+    </div>
+
+    <div
+      style="background: linear-gradient(to bottom right, #f8fbfd, #ffffff); border: 1px solid #e1eff8; border-radius: 12px; padding: 20px;">
+
+      <div style="margin-bottom: 20px;">
+        <h4
+          style="margin: 0 0 8px; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 16px;">💡</span> 深度洞察
+        </h4>
+        <p
+          style="margin: 0; color: var(--ink); line-height: 1.6; font-size: 14px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #edf4f9;">
+          {{ advice.insight|default:'暂无洞察，请产生多笔交易后再获取更准的AI结果。' }}
+        </p>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h4 style="margin: 0 0 8px; font-size: 14px; color: #d97706; display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 16px;">🔍</span> 原因分析
+        </h4>
+        <p
+          style="margin: 0; color: var(--ink); line-height: 1.6; font-size: 14px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #fdf5ec;">
+          {{ advice.reason|default:'暂无原因数据。' }}
+        </p>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h4
+          style="margin: 0 0 8px; font-size: 14px; color: var(--brand); display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 16px;">✅</span> 行动建议项
+        </h4>
+        {% if advice.actions %}
+        <ul style="margin: 0; padding-left: 0; list-style: none;">
+          {% for action in advice.actions %}
+          <li
+            style="margin-bottom: 6px; font-size: 14px; line-height: 1.6; color: var(--ink); display: flex; align-items: flex-start; gap: 8px;">
+            <span style="color: var(--brand); margin-top: 2px;">•</span>
+            {{ action }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted" style="margin: 0; font-size: 13px;">暂无明确的行动项。</p>
+        {% endif %}
+      </div>
+
+      <div style="margin-bottom: 0;">
+        <div style="background: #f1f8fc; border-radius: 8px; padding: 14px; border: 1px solid #cbe4f6;">
+          <h4 style="margin: 0 0 4px; font-size: 14px; color: #0288d1; display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 16px;">🎯</span> 下月目标
+          </h4>
+          <p style="margin: 0; color: var(--ink); font-size: 14px; font-weight: 500;">
+            {{ advice.goal|default:'暂无具体目标。' }}
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+{% endblock %}

@@ -1,0 +1,264 @@
+{% extends 'base.html' %}
+{% block title %}分析报告 {{ month }}{% endblock %}
+{% block content %}
+<div class="report-page">
+
+  <!-- ══ 页头 ══ -->
+  <div class="report-header">
+    <div>
+      <h2 class="page-title">📊 财务分析报告</h2>
+      <p class="page-desc">全面掌握收支结构，让每一分钱都花得明白。</p>
+    </div>
+    <div class="month-nav">
+      <a href="?month={{ prev_month }}" class="btn-ghost month-btn" title="上一月">‹</a>
+      <span class="month-label">{{ month }}</span>
+      <a href="?month={{ next_month }}"
+        class="btn-ghost month-btn {% if month >= current_month %}month-btn-disabled{% endif %}" title="下一月">›</a>
+      <a href="?month={{ month }}&refresh=1" class="btn-ghost refresh-btn" title="重新生成AI分析">↻ 刷新AI</a>
+    </div>
+  </div>
+
+  <!-- ══ 摘要卡片 ══ -->
+  <div class="stat-cards">
+    <div class="stat-card stat-income">
+      <div class="stat-icon">💰</div>
+      <div class="stat-body">
+        <div class="stat-label">本月收入</div>
+        <div class="stat-value">¥{{ monthly.income|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-expense">
+      <div class="stat-icon">💸</div>
+      <div class="stat-body">
+        <div class="stat-label">本月支出</div>
+        <div class="stat-value">¥{{ monthly.expense|floatformat:2 }}</div>
+        <div class="stat-sub">日均 ¥{{ monthly.avg_daily_expense }}</div>
+      </div>
+    </div>
+    <div class="stat-card {% if monthly.net >= 0 %}stat-net-pos{% else %}stat-net-neg{% endif %}">
+      <div class="stat-icon">{% if monthly.net >= 0 %}📈{% else %}📉{% endif %}</div>
+      <div class="stat-body">
+        <div class="stat-label">净额（结余）</div>
+        <div class="stat-value">¥{{ monthly.net|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-save">
+      <div class="stat-icon">💎</div>
+      <div class="stat-body">
+        <div class="stat-label">储蓄率</div>
+        <div class="stat-value">{{ monthly.savings_rate }}%</div>
+        <div class="stat-sub">共 {{ monthly.journal_count }} 笔记录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 主内容双栏 ══ -->
+  <div class="report-grid">
+
+    <!-- 左栏：分类分析 -->
+    <div class="report-col">
+
+      <!-- 饼图 -->
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🍕</span>
+          <h3 class="form-card-title">消费分类占比</h3>
+          {% if monthly.top_tag %}<span class="badge">热门标签：{{ monthly.top_tag }}</span>{% endif %}
+        </div>
+        {% if monthly.categories %}
+        <div id="catChart" style="height:280px;"></div>
+        {% else %}
+        <div class="report-empty">本月暂无分类支出数据</div>
+        {% endif %}
+      </div>
+
+      <!-- 分类排行榜 -->
+      {% if monthly.categories %}
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🏆</span>
+          <h3 class="form-card-title">支出排行榜</h3>
+        </div>
+        <div class="cat-rank-list">
+          {% for cat in monthly.categories %}
+          <div class="cat-rank-item">
+            <div class="cat-rank-head">
+              <span class="cat-rank-name">{{ cat.name }}</span>
+              <span class="cat-rank-amount">¥{{ cat.amount|floatformat:2 }}</span>
+              <span class="cat-rank-pct">{{ cat.pct }}%</span>
+            </div>
+            <div class="cat-rank-bar-wrap">
+              <div
+                class="cat-rank-bar {% if cat.pct > 40 %}bar-danger{% elif cat.pct > 25 %}bar-warn{% else %}bar-ok{% endif %}"
+                style="width:{{ cat.pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 右栏：AI建议 -->
+    <div class="report-col">
+
+      <!-- AI面板 -->
+      <div class="form-card ai-panel">
+        <div class="form-card-header">
+          <span class="form-card-icon">🤖</span>
+          <h3 class="form-card-title">AI 消费分析</h3>
+          <span class="badge {% if advice.mode == 'gemini' %}badge-ai{% else %}badge-rule{% endif %}">
+            {% if advice.mode == 'gemini' %}Gemini AI{% else %}规则分析{% endif %}
+          </span>
+        </div>
+
+        {% if advice.warnings %}
+        <div class="ai-warnings">
+          {% for w in advice.warnings %}
+          <div class="ai-warning-item">⚠️ <strong>{{ w }}</strong> 消费占比过高，建议重点控制</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="ai-insight">
+          <div class="ai-insight-label">💡 核心洞察</div>
+          <div class="ai-insight-text">{{ advice.insight }}</div>
+        </div>
+
+        {% if advice.reason %}
+        <div class="ai-reason">
+          <span class="ai-section-label">原因分析</span>
+          <p>{{ advice.reason }}</p>
+        </div>
+        {% endif %}
+
+        {% if advice.actions %}
+        <div class="ai-actions">
+          <span class="ai-section-label">行动建议</span>
+          {% for action in advice.actions %}
+          <div class="ai-action-item">
+            <span class="action-num">{{ forloop.counter }}</span>
+            <span>{{ action }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if advice.goal %}
+        <div class="ai-goal">
+          <span class="ai-goal-icon">🎯</span>
+          <div>
+            <div class="ai-goal-label">月度目标</div>
+            <div class="ai-goal-text">{{ advice.goal }}</div>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="ai-footer">
+          生成于 {{ advice.generated_at|default:"—" }}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ 年度趋势 ══ -->
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📅</span>
+      <h3 class="form-card-title">{{ year }} 年度趋势</h3>
+      <span class="badge">年收入 ¥{{ yearly.income|floatformat:0 }}</span>
+      <span class="badge badge-expense">年支出 ¥{{ yearly.expense|floatformat:0 }}</span>
+    </div>
+    <div id="yearChart" style="height:300px;"></div>
+  </div>
+
+</div><!-- /report-page -->
+
+<script>
+  const catData = {{ monthly.categories| safe }};
+  const yearData = {{ yearly.months| safe }};
+
+  // ── 饼图（玫瑰型） ──
+  if (catData.length > 0) {
+    const catChart = echarts.init(document.getElementById('catChart'));
+    catChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+      legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 12 } },
+      series: [{
+        type: 'pie',
+        radius: ['30%', '65%'],
+        roseType: 'area',
+        center: ['38%', '50%'],
+        data: catData.map(x => ({ name: x.name, value: x.amount.toFixed(2) })),
+        label: { formatter: '{b}\n{d}%', fontSize: 12 },
+        itemStyle: {
+          borderRadius: 6,
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
+        emphasis: {
+          itemStyle: { shadowBlur: 12, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.2)' }
+        }
+      }]
+    });
+  }
+
+  // ── 年度趋势折线图 ──
+  const yearChart = echarts.init(document.getElementById('yearChart'));
+  yearChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    legend: { data: ['收入', '支出', '净额'], top: 4 },
+    grid: { left: 60, right: 20, top: 40, bottom: 40 },
+    xAxis: {
+      type: 'category',
+      data: yearData.map(x => x.month.slice(5)),   // show "01"…"12"
+      axisLine: { lineStyle: { color: '#d8e2d7' } },
+      axisLabel: { color: '#637567' },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: '#637567', formatter: '¥{value}' },
+      splitLine: { lineStyle: { color: '#edf3ee' } },
+    },
+    series: [
+      {
+        name: '收入', type: 'line', smooth: true,
+        data: yearData.map(x => x.income),
+        lineStyle: { width: 2.5, color: '#2e7d4f' },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [{ offset: 0, color: 'rgba(46,125,79,.18)' }, { offset: 1, color: 'rgba(46,125,79,0)' }]
+          }
+        },
+        symbol: 'circle', symbolSize: 6, itemStyle: { color: '#2e7d4f' },
+      },
+      {
+        name: '支出', type: 'line', smooth: true,
+        data: yearData.map(x => x.expense),
+        lineStyle: { width: 2.5, color: '#ef4444' },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [{ offset: 0, color: 'rgba(239,68,68,.14)' }, { offset: 1, color: 'rgba(239,68,68,0)' }]
+          }
+        },
+        symbol: 'circle', symbolSize: 6, itemStyle: { color: '#ef4444' },
+      },
+      {
+        name: '净额', type: 'line', smooth: true,
+        data: yearData.map(x => x.net),
+        lineStyle: { width: 2, color: '#3b82f6', type: 'dashed' },
+        symbol: 'none', itemStyle: { color: '#3b82f6' },
+      },
+    ]
+  });
+
+  // Resize on window resize
+  window.addEventListener('resize', () => {
+    if (catData.length) catChart.resize();
+    yearChart.resize();
+  });
+</script>
+{% endblock %}

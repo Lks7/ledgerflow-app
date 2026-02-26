@@ -1,0 +1,82 @@
+[
+  {
+    "id": "boc",
+    "name": "中国银行",
+    "type": "asset",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "-16.38",
+    "note": ""
+  },
+  {
+    "id": "wechat",
+    "name": "微信",
+    "type": "asset",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "0.00",
+    "note": ""
+  },
+  {
+    "id": "cmb",
+    "name": "招商银行",
+    "type": "asset",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "0.00",
+    "note": ""
+  },
+  {
+    "id": "alipay",
+    "name": "支付宝",
+    "type": "asset",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "0.00",
+    "note": ""
+  },
+  {
+    "id": "general",
+    "name": "通用账户",
+    "type": "asset",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "0.00",
+    "note": ""
+  },
+  {
+    "id": "expense",
+    "name": "费用汇总",
+    "type": "expense",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "16.38",
+    "note": ""
+  },
+  {
+    "id": "income",
+    "name": "工资",
+    "type": "income",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "0.00",
+    "note": ""
+  },
+  {
+    "id": "credit_card",
+    "name": "信用卡",
+    "type": "liability",
+    "currency": "CNY",
+    "status": "active",
+    "opening_balance": "0.00",
+    "balance": "0.00",
+    "note": ""
+  }
+]
