@@ -27,8 +27,8 @@ if [ ! -f .env ]; then
     cat > .env << EOF
 SECRET_KEY=${SECRET_KEY}
 DEBUG=False
-ALLOWED_HOSTS=524120.xyz,localhost
-CSRF_TRUSTED_ORIGINS=https://524120.xyz
+ALLOWED_HOSTS=book.524120.xyz,localhost
+CSRF_TRUSTED_ORIGINS=https://book.524120.xyz
 DB_PATH=/app/db/db.sqlite3
 GOOGLE_API_KEY=
 GEMINI_MODEL=gemini-1.5-flash
@@ -43,12 +43,12 @@ docker compose up -d --build
 echo ""
 echo "========================================="
 echo "  部署完成！"
-echo "  访问地址: https://524120.xyz"
+echo "  访问地址: https://book.524120.xyz"
 echo "========================================="
 echo ""
 echo "请确保 Caddy 已配置反代，参考 deploy/Caddyfile："
-echo "  524120.xyz {"
-echo "      reverse_proxy 127.0.0.1:8000"
+echo "  book.524120.xyz {"
+echo "      reverse_proxy 127.0.0.1:8100"
 echo "  }"
 echo ""
 echo "常用命令："
