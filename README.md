@@ -92,3 +92,20 @@ AI 客户端 MCP 配置示例（通用）：
   }
 }
 ```
+
+## 远程 MCP（HTTP）
+
+项目已支持远程 MCP HTTP 入口：
+
+- `POST /mcp/http`
+
+部署后可通过域名访问，例如：
+
+- `https://book.524120.xyz/mcp/http`
+
+建议配置环境变量 `MCP_API_TOKEN` 作为远程调用鉴权：
+
+- 请求头可用 `Authorization: Bearer <token>`
+- 或 `X-MCP-Token: <token>`
+
+Cherry Studio 可选择 `streamablehttp` 类型并填入上述 URL 与 Token。

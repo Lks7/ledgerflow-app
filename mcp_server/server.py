@@ -527,6 +527,14 @@ def _handle_request(req: dict) -> dict | None:
     }
 
 
+def handle_jsonrpc_request(req: dict) -> dict | None:
+    """Public handler for JSON-RPC MCP requests.
+
+    This can be reused by stdio mode and HTTP mode.
+    """
+    return _handle_request(req)
+
+
 def _read_exact(buffer, size: int) -> bytes:
     chunks = []
     remaining = size
