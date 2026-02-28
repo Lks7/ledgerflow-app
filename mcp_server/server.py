@@ -294,8 +294,35 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
                     "description": {"type": "string"},
                     "source": {"type": "string"},
                     "tags": {"type": "string"},
-                    "entries": {"type": "array"},
-                    "transfer_lines": {"type": "array"},
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "account_id": {"type": "string"},
+                                "category_id": {"type": "string"},
+                                "debit": {"type": "string"},
+                                "credit": {"type": "string"},
+                                "currency": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["account_id", "debit", "credit"],
+                        },
+                    },
+                    "transfer_lines": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "from_account_id": {"type": "string"},
+                                "to_account_id": {"type": "string"},
+                                "amount": {"type": "string"},
+                                "currency": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["from_account_id", "to_account_id", "amount"],
+                        },
+                    },
                 },
                 "required": ["date", "description", "entries"],
             },
@@ -315,8 +342,35 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
                     "description": {"type": "string"},
                     "source": {"type": "string"},
                     "tags": {"type": "string"},
-                    "entries": {"type": "array"},
-                    "transfer_lines": {"type": "array"},
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "account_id": {"type": "string"},
+                                "category_id": {"type": "string"},
+                                "debit": {"type": "string"},
+                                "credit": {"type": "string"},
+                                "currency": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["account_id", "debit", "credit"],
+                        },
+                    },
+                    "transfer_lines": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "from_account_id": {"type": "string"},
+                                "to_account_id": {"type": "string"},
+                                "amount": {"type": "string"},
+                                "currency": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["from_account_id", "to_account_id", "amount"],
+                        },
+                    },
                 },
                 "required": ["month", "journal_id", "date", "description", "entries"],
             },
@@ -473,6 +527,11 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
     ),
 }
 
+# Some model providers (e.g. DeepSeek function calling) require tool names to
+# match ^[a-zA-Z0-9_-]+$ and reject dots. Keep internal dotted names, but
+# expose/accept transport-safe aliases with dots replaced by underscores.
+TOOL_ALIASES: dict[str, str] = {name.replace(".", "_"): name for name in TOOLS.keys()}
+
 
 def _handle_request(req: dict) -> dict | None:
     method = req.get("method")
@@ -493,23 +552,33 @@ def _handle_request(req: dict) -> dict | None:
         }
 
     if method == "tools/list":
+        tool_list = []
+        for internal_name, (meta, _fn) in TOOLS.items():
+            safe_name = internal_name.replace(".", "_")
+            item = dict(meta)
+            item["name"] = safe_name
+            tool_list.append(item)
         return {
             "jsonrpc": "2.0",
             "id": req_id,
-            "result": {"tools": [meta for meta, _fn in TOOLS.values()]},
+            "result": {"tools": tool_list},
         }
 
     if method == "tools/call":
         params = req.get("params") or {}
         name = params.get("name")
         arguments = params.get("arguments") or {}
-        if name not in TOOLS:
+        internal_name = name
+        if internal_name not in TOOLS:
+            internal_name = TOOL_ALIASES.get(str(name), "")
+
+        if internal_name not in TOOLS:
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": _err(f"unknown tool: {name}"),
             }
-        _meta, fn = TOOLS[name]
+        _meta, fn = TOOLS[internal_name]
         try:
             result = fn(arguments)
             return {"jsonrpc": "2.0", "id": req_id, "result": _ok(result)}
