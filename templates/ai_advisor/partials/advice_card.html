@@ -1,0 +1,56 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+  <h3 class="form-card-title">AI 消费建议</h3>
+  <span class="badge" style="background: #eef7f1; color: #1e7040; border: 1px solid #c8dbd0; font-size: 11px;">
+    {{ advice.mode|upper }}
+  </span>
+</div>
+<p style="margin: 2px 0 16px; font-size: 13px; color: var(--muted);">随身的人工智能财务顾问</p>
+
+<div style="background: linear-gradient(to bottom right, #f8fbfd, #ffffff); border: 1px solid #e1eff8; border-radius: 12px; padding: 20px;">
+  <div style="margin-bottom: 20px;">
+    <h4 style="margin: 0 0 8px; font-size: 14px; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+      <span style="font-size: 16px;">💡</span> 深度洞察
+    </h4>
+    <p style="margin: 0; color: var(--ink); line-height: 1.6; font-size: 14px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #edf4f9;">
+      {{ advice.insight|default:'暂无洞察，请产生多笔交易后再获取更准的AI结果。' }}
+    </p>
+  </div>
+
+  <div style="margin-bottom: 20px;">
+    <h4 style="margin: 0 0 8px; font-size: 14px; color: #d97706; display: flex; align-items: center; gap: 6px;">
+      <span style="font-size: 16px;">🔍</span> 原因分析
+    </h4>
+    <p style="margin: 0; color: var(--ink); line-height: 1.6; font-size: 14px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #fdf5ec;">
+      {{ advice.reason|default:'暂无原因数据。' }}
+    </p>
+  </div>
+
+  <div style="margin-bottom: 20px;">
+    <h4 style="margin: 0 0 8px; font-size: 14px; color: var(--brand); display: flex; align-items: center; gap: 6px;">
+      <span style="font-size: 16px;">✅</span> 行动建议项
+    </h4>
+    {% if advice.actions %}
+    <ul style="margin: 0; padding-left: 0; list-style: none;">
+      {% for action in advice.actions %}
+      <li style="margin-bottom: 6px; font-size: 14px; line-height: 1.6; color: var(--ink); display: flex; align-items: flex-start; gap: 8px;">
+        <span style="color: var(--brand); margin-top: 2px;">•</span>
+        {{ action }}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted" style="margin: 0; font-size: 13px;">暂无明确的行动项。</p>
+    {% endif %}
+  </div>
+
+  <div style="margin-bottom: 0;">
+    <div style="background: #f1f8fc; border-radius: 8px; padding: 14px; border: 1px solid #cbe4f6;">
+      <h4 style="margin: 0 0 4px; font-size: 14px; color: #0288d1; display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 16px;">🎯</span> 下月目标
+      </h4>
+      <p style="margin: 0; color: var(--ink); font-size: 14px; font-weight: 500;">
+        {{ advice.goal|default:'暂无具体目标。' }}
+      </p>
+    </div>
+  </div>
+</div>

@@ -7,7 +7,16 @@
       <h2 class="page-title">🏦 账户设置</h2>
       <p class="page-desc">复式记账四大账户类型：资产、负债、收入、支出，精准反映资金全貌。</p>
     </div>
-    <a href="/journals/accounts/export/csv" class="btn-export">⬇️ 导出 CSV</a>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+      <a href="/journals/accounts/export/csv" class="btn-export">⬇️ 导出账户 CSV</a>
+      <a href="/journals/data/export" class="btn-export">💾 导出完整备份</a>
+      <form method="post" action="/journals/data/import" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;">
+        {% csrf_token %}
+        <input type="file" name="data_file" accept=".zip,.json" required class="form-input" style="width:160px;padding:6px 8px;" />
+        <button type="submit" class="btn-export" style="background:#fff7ed;border-color:#fed7aa;color:#9a3412;"
+          onclick="return confirm('导入会覆盖当前所有数据，确认继续？')">📥 导入备份</button>
+      </form>
+    </div>
   </div>
 
   {% if error %}

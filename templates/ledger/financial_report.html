@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block title %}财务报表 {{ month }}{% endblock %}
+{% block content %}
+<div class="report-page">
+  <div class="report-header">
+    <div>
+      <h2 class="page-title">📑 财务报表</h2>
+      <p class="page-desc">按月查看收入、支出、分类、标签与账户变动的综合统计。</p>
+    </div>
+    <div class="month-nav">
+      <a href="?month={{ prev_month }}" class="btn-ghost month-btn" title="上一月">‹</a>
+      <span class="month-label">{{ month }}</span>
+      <a href="?month={{ next_month }}" class="btn-ghost month-btn {% if month >= current_month %}month-btn-disabled{% endif %}" title="下一月">›</a>
+    </div>
+  </div>
+
+  <div class="stat-cards">
+    <div class="stat-card stat-income">
+      <div class="stat-icon">💰</div>
+      <div class="stat-body">
+        <div class="stat-label">本月收入</div>
+        <div class="stat-value">¥{{ monthly.income|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-expense">
+      <div class="stat-icon">💸</div>
+      <div class="stat-body">
+        <div class="stat-label">本月支出</div>
+        <div class="stat-value">¥{{ monthly.expense|floatformat:2 }}</div>
+        <div class="stat-sub">日均 ¥{{ monthly.avg_daily_expense }}</div>
+      </div>
+    </div>
+    <div class="stat-card {% if monthly.net >= 0 %}stat-net-pos{% else %}stat-net-neg{% endif %}">
+      <div class="stat-icon">{% if monthly.net >= 0 %}📈{% else %}📉{% endif %}</div>
+      <div class="stat-body">
+        <div class="stat-label">净额（结余）</div>
+        <div class="stat-value">¥{{ monthly.net|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-save">
+      <div class="stat-icon">💎</div>
+      <div class="stat-body">
+        <div class="stat-label">储蓄率</div>
+        <div class="stat-value">{{ monthly.savings_rate }}%</div>
+        <div class="stat-sub">共 {{ monthly.journal_count }} 笔记录</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="report-grid">
+    <div class="report-col">
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🍕</span>
+          <h3 class="form-card-title">消费分类占比</h3>
+          {% if monthly.top_tag %}<span class="badge">热门标签：{{ monthly.top_tag }}</span>{% endif %}
+        </div>
+        {% if monthly.categories %}
+        <div id="catChart" style="height:280px;"></div>
+        {% else %}
+        <div class="report-empty">本月暂无分类支出数据</div>
+        {% endif %}
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🏷️</span>
+          <h3 class="form-card-title">标签统计</h3>
+        </div>
+        {% if tags %}
+        <div class="cat-rank-list">
+          {% for t in tags %}
+          <div class="cat-rank-item">
+            <div class="cat-rank-head">
+              <span class="cat-rank-name">#{{ t.tag }}</span>
+              <span class="cat-rank-pct">{{ t.count }} 次</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="report-empty">本月暂无标签数据</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="report-col">
+      <div class="form-card">
+        <div class="form-card-header">
+          <span class="form-card-icon">🏦</span>
+          <h3 class="form-card-title">账户净变动</h3>
+        </div>
+        {% if account_rank %}
+        <div class="cat-rank-list">
+          {% for acc in account_rank %}
+          <div class="cat-rank-item">
+            <div class="cat-rank-head">
+              <span class="cat-rank-name">{{ acc.name }}</span>
+              <span class="cat-rank-amount" style="color:{% if acc.amount >= 0 %}#16a34a{% else %}#dc2626{% endif %}">
+                {% if acc.amount >= 0 %}+{% endif %}¥{{ acc.amount|floatformat:2 }}
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="report-empty">本月暂无账户变动数据</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📅</span>
+      <h3 class="form-card-title">{{ year }} 年度趋势</h3>
+      <span class="badge">年收入 ¥{{ yearly.income|floatformat:0 }}</span>
+      <span class="badge badge-expense">年支出 ¥{{ yearly.expense|floatformat:0 }}</span>
+    </div>
+    <div id="yearChart" style="height:300px;"></div>
+  </div>
+</div>
+
+<script>
+  const catData = {{ monthly.categories|safe }};
+  const yearData = {{ yearly.months|safe }};
+
+  if (catData.length > 0) {
+    const catChart = echarts.init(document.getElementById('catChart'));
+    catChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+      legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 12 } },
+      series: [{
+        type: 'pie',
+        radius: ['30%', '65%'],
+        roseType: 'area',
+        center: ['38%', '50%'],
+        data: catData.map(x => ({ name: x.name, value: x.amount.toFixed(2) })),
+      }]
+    });
+  }
+
+  const yearChart = echarts.init(document.getElementById('yearChart'));
+  yearChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    legend: { data: ['收入', '支出', '净额'], top: 4 },
+    grid: { left: 60, right: 20, top: 40, bottom: 40 },
+    xAxis: { type: 'category', data: yearData.map(x => x.month.slice(5)) },
+    yAxis: { type: 'value', axisLabel: { formatter: '¥{value}' } },
+    series: [
+      { name: '收入', type: 'line', smooth: true, data: yearData.map(x => x.income) },
+      { name: '支出', type: 'line', smooth: true, data: yearData.map(x => x.expense) },
+      { name: '净额', type: 'line', smooth: true, data: yearData.map(x => x.net) },
+    ]
+  });
+
+  window.addEventListener('resize', () => {
+    if (catData.length) catChart.resize();
+    yearChart.resize();
+  });
+</script>
+{% endblock %}

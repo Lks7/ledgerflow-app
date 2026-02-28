@@ -14,6 +14,17 @@ def monthly_advice(request):
     return JsonResponse(generate_monthly_advice(month, force_refresh=force))
 
 
+def monthly_advice_ui(request):
+    month = request.GET.get("month") or datetime.now().strftime("%Y-%m")
+    force = request.GET.get("refresh") == "1"
+    advice = generate_monthly_advice(month, force_refresh=force)
+    return render(
+        request,
+        "ai_advisor/partials/advice_card.html",
+        {"advice": advice},
+    )
+
+
 def config_page(request):
     test_result = None
     if request.method == "POST":

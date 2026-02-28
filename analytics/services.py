@@ -161,3 +161,33 @@ def current_month() -> str:
 
 def current_year() -> str:
     return datetime.now().strftime("%Y")
+
+
+def yearly_daily_expenses(year: str) -> list:
+    """Return a list of [date_str, amount_float] for all expenses in the given year."""
+    try:
+        y = int(year)
+        start_date = date(y, 1, 1)
+        end_date = date(y, 12, 31)
+    except Exception:
+        now = datetime.now()
+        start_date = date(now.year, 1, 1)
+        end_date = date(now.year, 12, 31)
+
+    journals = Journal.objects.filter(
+        date__range=[start_date, end_date]
+    ).prefetch_related("entries")
+
+    accounts = {a.id: a for a in Account.objects.all()}
+    
+    daily_expenses = defaultdict(Decimal)
+
+    for journal in journals:
+        date_str = str(journal.date)
+        for entry in journal.entries.all():
+            account = accounts.get(entry.account_id)
+            if account and account.type == "expense" and entry.debit > 0:
+                daily_expenses[date_str] += entry.debit
+
+    return [[date_str, float(amount)] for date_str, amount in daily_expenses.items()]
+

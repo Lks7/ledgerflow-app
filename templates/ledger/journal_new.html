@@ -108,9 +108,14 @@
     <div class="action-bar" style="max-width: 800px; margin: 0 auto;">
       <div class="action-buttons" style="width: 100%; justify-content: space-between;">
         <a href="/journals/" class="btn-ghost">取消返回</a>
-        <button type="submit" class="btn-primary-lg">
-          💾 保存记账
-        </button>
+        <div style="display:flex; gap:8px;">
+          <button type="submit" name="submit_action" value="save_and_new" class="btn-ghost" style="border:1px solid var(--line);">
+            ➕ 再记一笔
+          </button>
+          <button type="submit" name="submit_action" value="save" class="btn-primary-lg">
+            💾 保存记账
+          </button>
+        </div>
       </div>
     </div>
   </form>

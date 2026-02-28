@@ -38,3 +38,57 @@ python -m venv .venv
 ```bash
 .venv/Scripts/python.exe manage.py test
 ```
+
+## MCP Server（给 AI 客户端调用）
+
+已内置一个基于 stdio 的 MCP 服务，支持记账、购物清单和报表查询。
+
+启动命令：
+
+```bash
+.venv/Scripts/python.exe scripts/run_mcp_server.py
+```
+
+如果你希望“启动项目时自动带上 MCP 服务”：
+
+```bash
+.venv/Scripts/python.exe scripts/start_with_mcp.py
+```
+
+这个脚本会同时启动：
+
+- Django 开发服务（`manage.py runserver`）
+- MCP stdio 服务（`scripts/run_mcp_server.py`）
+
+可用 tools（首批）：
+
+- `ledger.get_accounts`
+- `ledger.get_categories`
+- `ledger.list_tags`
+- `ledger.list_journals`
+- `ledger.get_journal`
+- `ledger.create_journal`
+- `ledger.update_journal`
+- `ledger.delete_journal`（需 `confirm=true`）
+- `shopping.list_items`
+- `shopping.add_item`
+- `shopping.update_item`
+- `shopping.update_status`
+- `shopping.delete_item`（需 `confirm=true`）
+- `shopping.pending_summary`
+- `report.monthly_summary`
+- `report.period_summary`
+- `report.yearly_summary`
+
+AI 客户端 MCP 配置示例（通用）：
+
+```json
+{
+  "mcpServers": {
+    "ledgerflow": {
+      "command": "D:/project/memory/.venv/Scripts/python.exe",
+      "args": ["D:/project/memory/scripts/run_mcp_server.py"]
+    }
+  }
+}
+```

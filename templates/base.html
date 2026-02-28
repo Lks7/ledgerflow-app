@@ -22,9 +22,8 @@
         <a href="/journals/" class="{% if request.path == '/journals/' %}active{% endif %}">交易明细</a>
         <a href="/journals/new" class="{% if request.path == '/journals/new' %}active{% endif %}">新增记账</a>
         <a href="/journals/accounts" class="{% if request.path == '/journals/accounts' %}active{% endif %}">账户设置</a>
-        <a href="/journals/categories" class="{% if request.path == '/journals/categories' %}active{% endif %}">分类管理</a>
-        <a href="/journals/tags" class="{% if request.path == '/journals/tags' %}active{% endif %}">标签管理</a>
-        <a href="/journals/logs" class="{% if request.path == '/journals/logs' %}active{% endif %}">记账日志</a>
+        <a href="/journals/categories" class="{% if request.path == '/journals/categories' or request.path == '/journals/tags' %}active{% endif %}">分类管理</a>
+        <a href="/journals/reports" class="{% if request.path == '/journals/reports' or request.path == '/journals/logs' %}active{% endif %}">财务报表</a>
         <a href="/ai/config" class="{% if request.path == '/ai/config' %}active{% endif %}">AI配置</a>
         <a href="/lists/" class="{% if request.path == '/lists/' %}active{% endif %}">购物清单</a>
         <a href="/reports" class="{% if request.path == '/reports' %}active{% endif %}">分析报告</a>

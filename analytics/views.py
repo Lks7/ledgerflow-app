@@ -10,6 +10,7 @@ from .services import (
     monthly_summary,
     summary_for_period,
     yearly_summary,
+    yearly_daily_expenses,
 )
 
 
@@ -35,14 +36,22 @@ def dashboard(request):
         period = "month"
 
     summary = summary_for_period(period)
+    
+    # Needs json dumps for the frontend echarts
+    import json
+    categories_raw_json = json.dumps(summary.get("categories_raw", []))
+    
+    yearly_expenses_json = json.dumps(yearly_daily_expenses(current_year()))
 
-    # AI advice still uses month summary as baseline.
-    month = current_month()
-    advice = generate_monthly_advice(month)
     return render(
         request,
         "analytics/dashboard.html",
-        {"summary": summary, "advice": advice, "period": period},
+        {
+            "summary": summary, 
+            "period": period,
+            "categories_raw_json": categories_raw_json,
+            "yearly_expenses_json": yearly_expenses_json,
+        },
     )
 
 

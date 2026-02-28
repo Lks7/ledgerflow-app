@@ -1,9 +1,26 @@
 import csv
+import io
+import json
+import zipfile
 from datetime import datetime
 
 from django.contrib import messages
+from django.db import transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import redirect, render
+
+from ai_advisor.models import AIAdviceSnapshot, AIConfig
+from analytics.services import monthly_summary, yearly_summary
+from lists.models import ShoppingItem
+
+from .models import (
+    Account,
+    Category,
+    Journal,
+    JournalEntry,
+    JournalLog,
+    JournalTransfer,
+)
 
 from .services import (
     account_used_count,
@@ -165,6 +182,8 @@ def journal_create(request):
     if request.method != "POST":
         return HttpResponseBadRequest("只支持 POST")
 
+    submit_action = request.POST.get("submit_action", "save")
+
     date = request.POST.get("date", "")
     description = request.POST.get("description", "")
     source = request.POST.get("source", "manual")
@@ -218,6 +237,8 @@ def journal_create(request):
         return render(request, "ledger/journal_new.html", context, status=400)
 
     messages.success(request, "记账成功")
+    if submit_action == "save_and_new":
+        return redirect("journal_new")
     return redirect("journal_list")
 
 
@@ -448,8 +469,88 @@ def account_update(request):
 
 
 def journal_logs(request):
-    logs = list_journal_logs(limit=300)
-    return render(request, "ledger/journal_logs.html", {"logs": logs})
+    return redirect("financial_report")
+
+
+def _month_shift(month: str, delta: int) -> str:
+    y, m = map(int, month.split("-"))
+    m += delta
+    while m < 1:
+        m += 12
+        y -= 1
+    while m > 12:
+        m -= 12
+        y += 1
+    return f"{y:04d}-{m:02d}"
+
+
+def financial_report(request):
+    month = request.GET.get("month") or datetime.now().strftime("%Y-%m")
+    year = month[:4]
+
+    monthly = monthly_summary(month)
+    yearly = yearly_summary(year)
+
+    prev_month = _month_shift(month, -1)
+    next_month = _month_shift(month, 1)
+    current_month = datetime.now().strftime("%Y-%m")
+
+    raw_journals = list_journals(month)
+    tag_counts = {}
+    for j in raw_journals:
+        for t in j.get("tags") or []:
+            tag_counts[t] = tag_counts.get(t, 0) + 1
+
+    tags = sorted(
+        [{"tag": k, "count": v} for k, v in tag_counts.items()],
+        key=lambda x: x["count"],
+        reverse=True,
+    )
+
+    account_name_map = {a.get("id"): a.get("name") for a in get_accounts()}
+    account_type_map = {a.get("id"): a.get("type") for a in get_accounts()}
+    account_amount_map = {}
+    for j in raw_journals:
+        for e in j.get("entries", []):
+            aid = e.get("account_id")
+            if not aid:
+                continue
+            debit = float(e.get("debit") or 0)
+            credit = float(e.get("credit") or 0)
+            t = account_type_map.get(aid)
+            amt = 0.0
+            if t in {"asset", "expense"}:
+                amt = debit - credit
+            else:
+                amt = credit - debit
+            account_amount_map[aid] = account_amount_map.get(aid, 0.0) + amt
+
+    account_rank = sorted(
+        [
+            {
+                "account_id": aid,
+                "name": account_name_map.get(aid, aid),
+                "amount": round(amount, 2),
+            }
+            for aid, amount in account_amount_map.items()
+            if abs(amount) > 0.0001
+        ],
+        key=lambda x: abs(x["amount"]),
+        reverse=True,
+    )
+
+    context = {
+        "month": month,
+        "year": year,
+        "monthly": monthly,
+        "yearly": yearly,
+        "tags": tags,
+        "account_rank": account_rank,
+        "prev_month": prev_month,
+        "next_month": next_month,
+        "current_month": current_month,
+    }
+    return render(request, "ledger/financial_report.html", context)
 
 
 # ── Journal Edit ────────────────────────────────────────────────────────────
@@ -635,6 +736,281 @@ def account_export_csv(request):
             ]
         )
     return response
+
+
+def data_export_json(request):
+    accounts = [
+        {
+            "id": a.id,
+            "name": a.name,
+            "type": a.type,
+            "currency": a.currency,
+            "status": a.status,
+            "opening_balance": str(a.opening_balance),
+            "balance": str(a.balance),
+            "note": a.note,
+        }
+        for a in Account.objects.all()
+    ]
+
+    categories = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "icon": c.icon,
+            "group": c.group,
+            "parent_id": c.parent_id,
+            "budget_monthly": str(c.budget_monthly),
+        }
+        for c in Category.objects.all()
+    ]
+
+    journals = []
+    for j in Journal.objects.all().prefetch_related("entries", "transfers"):
+        journals.append(
+            {
+                "id": j.id,
+                "date": str(j.date),
+                "description": j.description,
+                "source": j.source,
+                "tags_raw": j.tags_raw,
+                "entries": [
+                    {
+                        "account_id": e.account_id,
+                        "category_id": e.category_id,
+                        "debit": str(e.debit),
+                        "credit": str(e.credit),
+                        "currency": e.currency,
+                        "note": e.note,
+                    }
+                    for e in j.entries.all()
+                ],
+                "transfers": [
+                    {
+                        "from_account_id": t.from_account_id,
+                        "to_account_id": t.to_account_id,
+                        "amount": str(t.amount),
+                        "currency": t.currency,
+                        "note": t.note,
+                    }
+                    for t in j.transfers.all()
+                ],
+            }
+        )
+
+    shopping_items = [
+        {
+            "id": i.id,
+            "name": i.name,
+            "qty": i.qty,
+            "est_price": str(i.est_price),
+            "actual_price": str(i.actual_price),
+            "priority": i.priority,
+            "status": i.status,
+            "planned_date": i.planned_date,
+            "platform": i.platform,
+            "note": i.note,
+        }
+        for i in ShoppingItem.objects.all()
+    ]
+
+    ai_config = [
+        {
+            "provider": c.provider,
+            "api_base_url": c.api_base_url,
+            "api_key": c.api_key,
+            "model_name": c.model_name,
+            "system_prompt": c.system_prompt,
+        }
+        for c in AIConfig.objects.all()
+    ]
+
+    ai_snapshots = [
+        {
+            "month": s.month,
+            "payload": s.payload,
+            "updated_at": s.updated_at.isoformat(),
+            "created_at": s.created_at.isoformat(),
+        }
+        for s in AIAdviceSnapshot.objects.all()
+    ]
+
+    journal_logs = [
+        {
+            "timestamp": l.timestamp.isoformat(),
+            "action": l.action,
+            "journal_id": l.journal_id,
+            "date": l.date,
+            "description": l.description,
+            "entries": l.entries,
+        }
+        for l in JournalLog.objects.all()
+    ]
+
+    payload = {
+        "version": "1.0",
+        "exported_at": datetime.now().isoformat(),
+        "accounts": accounts,
+        "categories": categories,
+        "journals": journals,
+        "shopping_items": shopping_items,
+        "ai_config": ai_config,
+        "ai_snapshots": ai_snapshots,
+        "journal_logs": journal_logs,
+    }
+
+    response = HttpResponse(content_type="application/zip")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    response["Content-Disposition"] = (
+        f'attachment; filename="ledgerflow_backup_{ts}.zip"'
+    )
+
+    mem = io.BytesIO()
+    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("backup.json", json.dumps(payload, ensure_ascii=False, indent=2))
+    response.write(mem.getvalue())
+    return response
+
+
+def _parse_dt(value: str):
+    if not value:
+        return datetime.now()
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def data_import_json(request):
+    if request.method != "POST":
+        return HttpResponseBadRequest("只支持 POST")
+
+    f = request.FILES.get("data_file")
+    if not f:
+        messages.error(request, "请选择要导入的备份文件")
+        return redirect("account_settings")
+
+    try:
+        raw = f.read()
+        if f.name.lower().endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(raw), "r") as zf:
+                with zf.open("backup.json") as fp:
+                    payload = json.loads(fp.read().decode("utf-8"))
+        else:
+            payload = json.loads(raw.decode("utf-8"))
+    except Exception:
+        messages.error(request, "备份文件格式不正确")
+        return redirect("account_settings")
+
+    try:
+        with transaction.atomic():
+            JournalEntry.objects.all().delete()
+            JournalTransfer.objects.all().delete()
+            Journal.objects.all().delete()
+            JournalLog.objects.all().delete()
+            ShoppingItem.objects.all().delete()
+            AIAdviceSnapshot.objects.all().delete()
+            AIConfig.objects.all().delete()
+            Category.objects.all().delete()
+            Account.objects.all().delete()
+
+            for a in payload.get("accounts", []):
+                Account.objects.create(
+                    id=a.get("id", ""),
+                    name=a.get("name", ""),
+                    type=a.get("type", "asset"),
+                    currency=a.get("currency", "CNY"),
+                    status=a.get("status", "active"),
+                    opening_balance=a.get("opening_balance", "0"),
+                    balance=a.get("balance", "0"),
+                    note=a.get("note", ""),
+                )
+
+            parent_map = {}
+            for c in payload.get("categories", []):
+                parent_map[c.get("id")] = c.get("parent_id") or None
+                Category.objects.create(
+                    id=c.get("id", ""),
+                    name=c.get("name", ""),
+                    icon=c.get("icon", ""),
+                    group=c.get("group", ""),
+                    budget_monthly=c.get("budget_monthly", "0"),
+                )
+
+            for cid, pid in parent_map.items():
+                if pid and Category.objects.filter(id=pid).exists():
+                    Category.objects.filter(id=cid).update(parent_id=pid)
+
+            for j in payload.get("journals", []):
+                journal = Journal.objects.create(
+                    id=j.get("id", ""),
+                    date=j.get("date", datetime.now().strftime("%Y-%m-%d")),
+                    description=j.get("description", ""),
+                    source=j.get("source", "manual"),
+                    tags_raw=j.get("tags_raw", ""),
+                )
+                for e in j.get("entries", []):
+                    JournalEntry.objects.create(
+                        journal=journal,
+                        account_id=e.get("account_id", ""),
+                        category_id=e.get("category_id") or None,
+                        debit=e.get("debit", "0"),
+                        credit=e.get("credit", "0"),
+                        currency=e.get("currency", "CNY"),
+                        note=e.get("note", ""),
+                    )
+                for t in j.get("transfers", []):
+                    JournalTransfer.objects.create(
+                        journal=journal,
+                        from_account_id=t.get("from_account_id", ""),
+                        to_account_id=t.get("to_account_id", ""),
+                        amount=t.get("amount", "0"),
+                        currency=t.get("currency", "CNY"),
+                        note=t.get("note", ""),
+                    )
+
+            for i in payload.get("shopping_items", []):
+                ShoppingItem.objects.create(
+                    id=i.get("id", ""),
+                    name=i.get("name", ""),
+                    qty=i.get("qty", 1),
+                    est_price=i.get("est_price", "0"),
+                    actual_price=i.get("actual_price", "0"),
+                    priority=i.get("priority", "normal"),
+                    status=i.get("status", "pending"),
+                    planned_date=i.get("planned_date", ""),
+                    platform=i.get("platform", ""),
+                    note=i.get("note", ""),
+                )
+
+            for c in payload.get("ai_config", []):
+                AIConfig.objects.create(
+                    provider=c.get("provider", "google"),
+                    api_base_url=c.get("api_base_url", ""),
+                    api_key=c.get("api_key", ""),
+                    model_name=c.get("model_name", "gemini-1.5-flash"),
+                    system_prompt=c.get("system_prompt", ""),
+                )
+
+            for s in payload.get("ai_snapshots", []):
+                AIAdviceSnapshot.objects.create(
+                    month=s.get("month", ""),
+                    payload=s.get("payload", {}),
+                    updated_at=_parse_dt(s.get("updated_at")),
+                    created_at=_parse_dt(s.get("created_at")),
+                )
+
+            for l in payload.get("journal_logs", []):
+                JournalLog.objects.create(
+                    timestamp=_parse_dt(l.get("timestamp")),
+                    action=l.get("action", ""),
+                    journal_id=l.get("journal_id", ""),
+                    date=l.get("date", ""),
+                    description=l.get("description", ""),
+                    entries=l.get("entries", []),
+                )
+
+        messages.success(request, "数据导入成功")
+    except Exception:
+        messages.error(request, "导入失败，请检查备份文件内容")
+    return redirect("account_settings")
 
 
 # ── Tag Management ───────────────────────────────────────────────────────────
