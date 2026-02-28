@@ -80,6 +80,12 @@ python -m venv .venv
 - `report.period_summary`
 - `report.yearly_summary`
 
+写操作幂等（防重复提交）：
+
+- `ledger_create_journal` 和 `shopping_add_item` 支持可选参数 `idempotency_key`
+- 同一个 key + 同样参数重复调用会返回第一次结果（`idempotency_replay=true`）
+- 同一个 key 但参数不同会返回冲突错误
+
 AI 客户端 MCP 配置示例（通用）：
 
 ```json

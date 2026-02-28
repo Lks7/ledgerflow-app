@@ -37,6 +37,7 @@ from lists.services import (  # noqa: E402
     update_item,
     update_status,
 )
+from storage.services import run_with_idempotency  # noqa: E402
 
 
 def _ok(result: Any) -> dict:
@@ -92,6 +93,7 @@ def tool_ledger_get_journal(args: dict) -> dict:
 
 
 def tool_ledger_create_journal(args: dict) -> dict:
+    idempotency_key = (args.get("idempotency_key") or "").strip()
     date = _required(args, "date")
     description = _required(args, "description")
     source = args.get("source", "mcp")
@@ -99,17 +101,35 @@ def tool_ledger_create_journal(args: dict) -> dict:
     entries = args.get("entries", [])
     transfer_lines = args.get("transfer_lines", [])
 
-    journal, error = create_journal(
-        date=date,
-        description=description,
-        source=source,
-        tags=tags,
-        entries=entries,
-        transfer_lines=transfer_lines,
-    )
-    if error:
-        return {"ok": False, "error": error}
-    return {"ok": True, "journal": journal}
+    def _run() -> dict:
+        journal, error = create_journal(
+            date=date,
+            description=description,
+            source=source,
+            tags=tags,
+            entries=entries,
+            transfer_lines=transfer_lines,
+        )
+        if error:
+            return {"ok": False, "error": error}
+        return {"ok": True, "journal": journal}
+
+    if idempotency_key:
+        return run_with_idempotency(
+            tool_name="ledger.create_journal",
+            idempotency_key=idempotency_key,
+            args_for_hash={
+                "date": date,
+                "description": description,
+                "source": source,
+                "tags": tags,
+                "entries": entries,
+                "transfer_lines": transfer_lines,
+            },
+            runner=_run,
+        )
+
+    return _run()
 
 
 def tool_ledger_update_journal(args: dict) -> dict:
@@ -153,6 +173,7 @@ def tool_shopping_list_items(args: dict) -> dict:
 
 
 def tool_shopping_add_item(args: dict) -> dict:
+    idempotency_key = (args.get("idempotency_key") or "").strip()
     name = _required(args, "name")
     qty = args.get("qty", 1)
     est_price = args.get("est_price", 0)
@@ -162,17 +183,37 @@ def tool_shopping_add_item(args: dict) -> dict:
     platform = args.get("platform", "")
     note = args.get("note", "")
 
-    item = add_item(
-        name=name,
-        qty=qty,
-        est_price=est_price,
-        actual_price=actual_price,
-        priority=priority,
-        planned_date=planned_date,
-        platform=platform,
-        note=note,
-    )
-    return {"ok": True, "item": item}
+    def _run() -> dict:
+        item = add_item(
+            name=name,
+            qty=qty,
+            est_price=est_price,
+            actual_price=actual_price,
+            priority=priority,
+            planned_date=planned_date,
+            platform=platform,
+            note=note,
+        )
+        return {"ok": True, "item": item}
+
+    if idempotency_key:
+        return run_with_idempotency(
+            tool_name="shopping.add_item",
+            idempotency_key=idempotency_key,
+            args_for_hash={
+                "name": name,
+                "qty": qty,
+                "est_price": est_price,
+                "actual_price": actual_price,
+                "priority": priority,
+                "planned_date": planned_date,
+                "platform": platform,
+                "note": note,
+            },
+            runner=_run,
+        )
+
+    return _run()
 
 
 def tool_shopping_update_item(args: dict) -> dict:
@@ -294,6 +335,7 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
                     "description": {"type": "string"},
                     "source": {"type": "string"},
                     "tags": {"type": "string"},
+                    "idempotency_key": {"type": "string"},
                     "entries": {
                         "type": "array",
                         "items": {
@@ -412,6 +454,7 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
+                    "idempotency_key": {"type": "string"},
                     "qty": {"type": "integer"},
                     "est_price": {"type": "number"},
                     "actual_price": {"type": "number"},
