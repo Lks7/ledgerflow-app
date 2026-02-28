@@ -43,10 +43,13 @@ def mcp_http(request):
             if resp is not None:
                 responses.append(resp)
         if not responses:
-            return HttpResponse(status=204)
+            # Some MCP clients always JSON.parse() body and fail on 204 empty body.
+            # Return an empty JSON array for better compatibility.
+            return JsonResponse([], safe=False)
         return JsonResponse(responses, safe=False)
 
     resp = handle_jsonrpc_request(payload)
     if resp is None:
-        return HttpResponse(status=204)
+        # Keep a JSON body to avoid client-side "unexpected end of data" errors.
+        return JsonResponse({"ok": True, "notification": True})
     return JsonResponse(resp)
