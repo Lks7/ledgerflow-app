@@ -2695,3 +2695,26 @@ button:hover {
   align-items: center;
   margin-top: 16px;
 }
+
+/* ══ Amount visibility mask ══ */
+.mask-amounts .input-amount,
+.mask-amounts .input-debit,
+.mask-amounts .input-credit,
+.mask-amounts .acc-num,
+.mask-amounts .stat-value,
+.mask-amounts .cat-rank-amount {
+  color: transparent !important;
+  text-shadow: none !important;
+  position: relative;
+}
+
+.mask-amounts .input-amount::after,
+.mask-amounts .input-debit::after,
+.mask-amounts .input-credit::after,
+.mask-amounts .acc-num::after,
+.mask-amounts .stat-value::after,
+.mask-amounts .cat-rank-amount::after {
+  content: "****";
+  color: #64748b;
+  font-weight: 700;
+}

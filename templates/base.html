@@ -17,6 +17,7 @@
     <aside class="side-nav">
       <div class="brand">LedgerFlow</div>
       <p class="brand-sub">复式记账助手</p>
+      <button id="toggle-amount-visibility" class="btn-ghost" style="width:100%;margin:8px 0 12px 0;">🙈 隐藏金额</button>
       <nav>
         <a href="/" class="{% if request.path == '/' %}active{% endif %}">仪表盘</a>
         <a href="/journals/" class="{% if request.path == '/journals/' %}active{% endif %}">交易明细</a>
@@ -54,6 +55,34 @@
     }, 3500);
   </script>
   {% endif %}
+
+  <script>
+    (function () {
+      var KEY = 'hide-amounts';
+      var body = document.body;
+      var btn = document.getElementById('toggle-amount-visibility');
+      if (!btn) return;
+
+      function apply(hidden) {
+        if (hidden) {
+          body.classList.add('mask-amounts');
+          btn.textContent = '👁️ 显示金额';
+        } else {
+          body.classList.remove('mask-amounts');
+          btn.textContent = '🙈 隐藏金额';
+        }
+      }
+
+      var hidden = localStorage.getItem(KEY) === '1';
+      apply(hidden);
+
+      btn.addEventListener('click', function () {
+        hidden = !hidden;
+        localStorage.setItem(KEY, hidden ? '1' : '0');
+        apply(hidden);
+      });
+    })();
+  </script>
 </body>
 
 </html>
