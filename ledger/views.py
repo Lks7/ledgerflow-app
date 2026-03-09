@@ -59,8 +59,23 @@ def journal_list(request):
         except (TypeError, ValueError):
             return 0.0
 
-    month = request.GET.get("month") or datetime.now().strftime("%Y-%m")
+    def _month_shift(ym: str, delta: int) -> str:
+        y, m = map(int, ym.split("-"))
+        m += delta
+        while m < 1:
+            y -= 1
+            m += 12
+        while m > 12:
+            y += 1
+            m -= 12
+        return f"{y:04d}-{m:02d}"
+
+    month = request.GET.get("month", "").strip()
     tag = request.GET.get("tag", "").strip()
+    current_month = datetime.now().strftime("%Y-%m")
+    month_for_nav = month or current_month
+    prev_month = _month_shift(month_for_nav, -1)
+    next_month = _month_shift(month_for_nav, 1)
     raw_journals = list_journals(month)
     tags = sorted({t for j in raw_journals for t in (j.get("tags") or [])})
     account_map = {x.get("id"): x.get("name") for x in get_accounts()}
@@ -75,6 +90,8 @@ def journal_list(request):
             row["account_name"] = account_map.get(
                 entry.get("account_id"), entry.get("account_id")
             )
+            category_id = entry.get("category_id") or ""
+            row["category_name"] = category_map.get(category_id, category_id)
             row["debit_amount"] = _to_amount(entry.get("debit"))
             row["credit_amount"] = _to_amount(entry.get("credit"))
             if not primary_category_id and entry.get("category_id"):
@@ -107,6 +124,9 @@ def journal_list(request):
         "tags": tags,
         "categories": categories,
         "journals": journals,
+        "current_month": current_month,
+        "prev_month": prev_month,
+        "next_month": next_month,
     }
     return render(request, "ledger/journal_list.html", context)
 

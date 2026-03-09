@@ -7,39 +7,37 @@
     <h1 class="page-title">交易明细</h1>
     <p class="page-desc">按月份和标签查看您的所有财务记录</p>
   </div>
-  <a href="/journals/export/csv?month={{ month }}" class="btn-export"
+  <a href="/journals/export/csv{% if month %}?month={{ month }}{% endif %}" class="btn-export"
     style="background:#fff; box-shadow: 0 4px 10px rgba(0,0,0,0.04); border-color: #d1dfd9; color: var(--ink);">
     <span style="margin-right: 6px; color: var(--brand);">⬇️</span> 导出 CSV
   </a>
 </div>
 
 <div class="form-card" style="padding: 18px 24px; margin-bottom: 24px; animation: fadeInUp 0.4s ease-out;">
-  <form method="get" action="/journals/" class="row spread" style="align-items: flex-end;">
-    <div class="row" style="gap: 20px; flex: 1;">
-      <div class="form-group" style="width: 160px;">
-        <label class="form-label-sm">月份 (Month)</label>
-        <input type="month" name="month" class="form-input" value="{{ month }}"
-          style="background: #fafcfb; border: 1px solid #d8e4db;" />
-      </div>
-      <div class="form-group" style="width: 200px;">
-        <label class="form-label-sm">标签 (Tag)</label>
-        <select name="tag" class="form-select" style="background: #fafcfb; border: 1px solid #d8e4db;">
-          <option value="">所有标签</option>
-          {% for t in tags %}
-          <option value="{{ t }}" {% if tag == t %}selected{% endif %}>{{ t }}</option>
-          {% endfor %}
-        </select>
-      </div>
+  <form method="get" action="/journals/" class="row spread" style="align-items: center; gap: 16px; flex-wrap: wrap;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <a href="/journals/?month={{ prev_month }}{% if tag %}&tag={{ tag|urlencode }}{% endif %}" class="btn-ghost"
+        style="padding:8px 10px; border-radius: 10px; font-weight:700;">‹</a>
+      <input type="month" name="month" class="form-input" value="{{ month }}"
+        style="width:150px; background:#fff; border:1px solid #d8e4db; border-radius:10px; font-weight:600;" />
+      <a href="/journals/?month={{ next_month }}{% if tag %}&tag={{ tag|urlencode }}{% endif %}" class="btn-ghost"
+        style="padding:8px 10px; border-radius: 10px; font-weight:700;">›</a>
+      <a href="/journals/?tag={{ tag|urlencode }}" class="btn-ghost"
+        style="padding:8px 12px; border-radius: 10px;">全部月份</a>
+      <a href="/journals/?month={{ current_month }}{% if tag %}&tag={{ tag|urlencode }}{% endif %}" class="btn-ghost"
+        style="padding:8px 12px; border-radius: 10px;">本月</a>
     </div>
-    <button type="submit" class="btn-primary"
-      style="padding: 10px 24px; border-radius: 10px; font-weight: 600; font-size: 14px;">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-        style="vertical-align: text-bottom; margin-right: 6px; display: inline-block;">
-        <circle cx="11" cy="11" r="8"></circle>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-      </svg>
-      筛选记录
-    </button>
+
+    <div class="row" style="gap: 10px; align-items:center;">
+      <select name="tag" class="form-select" style="min-width: 180px; background: #fff; border: 1px solid #d8e4db;">
+        <option value="">所有标签</option>
+        {% for t in tags %}
+        <option value="{{ t }}" {% if tag == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn-primary"
+        style="padding: 10px 18px; border-radius: 10px; font-weight: 600; font-size: 14px;">筛选</button>
+    </div>
   </form>
 </div>
 
@@ -144,7 +142,7 @@
                 <span style="font-weight: 600; color: var(--ink);">{{ e.account_name }}</span>
               </td>
               <td style="padding: 12px 16px; border-bottom: 1px solid #f4f8f5; color: var(--muted);">
-                {{ e.category_id|default:'<span style="opacity:0.3">-</span>'|safe }}
+                {{ e.category_name|default:'<span style="opacity:0.3">-</span>'|safe }}
               </td>
               <td style="padding: 12px 16px; border-bottom: 1px solid #f4f8f5; text-align: right;">
                 {% if e.debit_amount > 0 %}

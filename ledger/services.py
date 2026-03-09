@@ -308,10 +308,10 @@ def _journal_to_dict(j: Journal) -> dict:
     }
 
 
-def list_journals(month: str, tag: str = ""):
-    qs = Journal.objects.filter(date__startswith=month).prefetch_related(
-        "entries", "transfers"
-    )
+def list_journals(month: str = "", tag: str = ""):
+    qs = Journal.objects.all().prefetch_related("entries", "transfers")
+    if month:
+        qs = qs.filter(date__startswith=month)
     qs = qs.order_by("-date", "-created_at")
 
     journals = []
