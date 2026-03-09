@@ -2,8 +2,15 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from ai_advisor.models import AIAdviceSnapshot
-from ledger.models import Journal, JournalEntry, JournalLog, JournalTransfer
-from ledger.services import recalculate_account_balances
+from ledger.models import (
+    Account,
+    Category,
+    Journal,
+    JournalEntry,
+    JournalLog,
+    JournalTransfer,
+    Tag,
+)
 from lists.models import ShoppingItem
 from storage.models import IdempotencyRecord
 
@@ -11,7 +18,7 @@ from storage.models import IdempotencyRecord
 class Command(BaseCommand):
     help = (
         "Initialize book data by clearing transactional data while keeping "
-        "accounts/categories/tags."
+        "a minimal usable account structure."
     )
 
     def add_arguments(self, parser):
@@ -26,8 +33,8 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(
                     "This will clear journals, journal logs, shopping items, "
-                    "AI snapshots and idempotency records. "
-                    "Accounts/categories/tags will be kept."
+                    "AI snapshots, idempotency records, categories and tags. "
+                    "Account balances will be reset to 0."
                 )
             )
             confirmed = input("Type 'YES' to continue: ").strip()
@@ -43,9 +50,11 @@ class Command(BaseCommand):
             ShoppingItem.objects.all().delete()
             AIAdviceSnapshot.objects.all().delete()
             IdempotencyRecord.objects.all().delete()
-            recalculate_account_balances()
+            Category.objects.all().delete()
+            Tag.objects.all().delete()
+            Account.objects.all().update(opening_balance=0, balance=0)
 
         self.stdout.write(self.style.SUCCESS("Book initialized successfully."))
         self.stdout.write(
-            "Kept: accounts, categories, tags. Cleared: journals/logs/shopping/AI snapshots/idempotency."
+            "Cleared: journals/logs/shopping/AI snapshots/idempotency/categories/tags; reset account balances to 0."
         )
