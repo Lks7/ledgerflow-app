@@ -11,6 +11,7 @@
     </div>
     <div class="header-actions">
       <a href="/journals/" class="btn-ghost">← 返回列表</a>
+      <a href="/journals/templates/rent" class="btn-ghost">🏠 房租模板</a>
     </div>
   </div>
 
@@ -40,9 +41,29 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="jn-tags">🏷️ 标签 (英文逗号分隔)</label>
-            <input id="jn-tags" name="tags" value="{{ prefill_tags }}" placeholder="餐饮, 通勤, 旅游" class="form-input" />
+            <input id="jn-tags" name="tags" value="{{ prefill_tags }}" placeholder="餐饮, 通勤, 旅游" class="form-input"
+              list="existing-tags-list" />
+            <datalist id="existing-tags-list">
+              {% for t in existing_tags %}
+              {% if t %}<option value="{{ t }}">{% endif %}
+              {% endfor %}
+            </datalist>
           </div>
         </div>
+
+        {% if existing_tags %}
+        <div style="padding-bottom: 1.2rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+          <label class="form-label" style="margin-bottom: 8px; display: block;">🏷️ 常用标签（点击可追加）</label>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            {% for t in existing_tags %}
+            {% if t %}
+            <button type="button" class="bubble-btn tag-chip" data-tag="{{ t|escapejs }}" style="padding:5px 12px;font-size:12px;"
+              onclick="toggleTag('{{ t|escapejs }}')">#{{ t }}</button>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
 
         <div class="transfer-list">
           <div class="transfer-card">
@@ -146,9 +167,54 @@
     font-weight: 600;
     box-shadow: 0 2px 4px rgba(14, 165, 233, 0.15);
   }
+
+  .bubble-btn.selected {
+    background: #ecfdf3 !important;
+    color: #166534 !important;
+    border-color: #22c55e !important;
+    font-weight: 700;
+  }
 </style>
 
 <script>
+  function getTagParts() {
+    var input = document.getElementById('jn-tags');
+    if (!input) return [];
+    var raw = (input.value || '').trim();
+    if (!raw) return [];
+    return raw.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  function setTagParts(parts) {
+    var input = document.getElementById('jn-tags');
+    if (!input) return;
+    input.value = parts.join(', ');
+    updateTagButtons();
+  }
+
+  function toggleTag(tag) {
+    var parts = getTagParts();
+    var idx = parts.indexOf(tag);
+    if (idx >= 0) {
+      parts.splice(idx, 1);
+    } else {
+      parts.push(tag);
+    }
+    setTagParts(parts);
+  }
+
+  function updateTagButtons() {
+    var parts = getTagParts();
+    document.querySelectorAll('.tag-chip').forEach(function (btn) {
+      var t = btn.getAttribute('data-tag');
+      if (parts.indexOf(t) >= 0) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    });
+  }
+
   function journalForm() {
     const accountMap = {};
     const accountRows = JSON.parse(document.getElementById('accounts-data').textContent);
@@ -168,6 +234,15 @@
       }
     }
   }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var input = document.getElementById('jn-tags');
+    if (input) {
+      input.addEventListener('input', updateTagButtons);
+      input.addEventListener('change', updateTagButtons);
+    }
+    updateTagButtons();
+  });
 </script>
 {{ accounts|json_script:"accounts-data" }}
 {% endblock %}

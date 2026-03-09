@@ -61,27 +61,6 @@
         <div class="report-empty">本月暂无分类支出数据</div>
         {% endif %}
       </div>
-
-      <div class="form-card">
-        <div class="form-card-header">
-          <span class="form-card-icon">🏷️</span>
-          <h3 class="form-card-title">标签统计</h3>
-        </div>
-        {% if tags %}
-        <div class="cat-rank-list">
-          {% for t in tags %}
-          <div class="cat-rank-item">
-            <div class="cat-rank-head">
-              <span class="cat-rank-name">#{{ t.tag }}</span>
-              <span class="cat-rank-pct">{{ t.count }} 次</span>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="report-empty">本月暂无标签数据</div>
-        {% endif %}
-      </div>
     </div>
 
     <div class="report-col">
@@ -107,6 +86,64 @@
         <div class="report-empty">本月暂无账户变动数据</div>
         {% endif %}
       </div>
+
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">🤖</span>
+      <h3 class="form-card-title">AI 消费分析</h3>
+      <span class="badge {% if advice.mode == 'gemini' %}badge-ai{% else %}badge-rule{% endif %}">
+        {% if advice.mode == 'gemini' %}Gemini AI{% else %}规则分析{% endif %}
+      </span>
+      <a href="?month={{ month }}&refresh=1" class="btn-ghost" style="margin-left:auto;">↻ 刷新</a>
+    </div>
+
+    {% if advice.warnings %}
+    <div class="ai-warnings">
+      {% for w in advice.warnings %}
+      <div class="ai-warning-item">⚠️ <strong>{{ w }}</strong> 消费占比过高，建议重点控制</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="ai-insight">
+      <div class="ai-insight-label">💡 核心洞察</div>
+      <div class="ai-insight-text">{{ advice.insight }}</div>
+    </div>
+
+    {% if advice.reason %}
+    <div class="ai-reason">
+      <span class="ai-section-label">原因分析</span>
+      <p>{{ advice.reason }}</p>
+    </div>
+    {% endif %}
+
+    {% if advice.actions %}
+    <div class="ai-actions">
+      <span class="ai-section-label">行动建议</span>
+      {% for action in advice.actions %}
+      <div class="ai-action-item">
+        <span class="action-num">{{ forloop.counter }}</span>
+        <span>{{ action }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if advice.goal %}
+    <div class="ai-goal">
+      <span class="ai-goal-icon">🎯</span>
+      <div>
+        <div class="ai-goal-label">月度目标</div>
+        <div class="ai-goal-text">{{ advice.goal }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="ai-footer">
+      生成于 {{ advice.generated_at|default:"—" }}
     </div>
   </div>
 

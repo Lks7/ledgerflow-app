@@ -1,8 +1,9 @@
 from datetime import datetime, date
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from ai_advisor.services import generate_monthly_advice
+from ledger.services import get_accounts
 
 from .services import (
     current_month,
@@ -36,48 +37,36 @@ def dashboard(request):
         period = "month"
 
     summary = summary_for_period(period)
-    
+
+    today = date.today()
+    default_end_date = today.isoformat()
+    default_start_date = (today.fromordinal(today.toordinal() - 30)).isoformat()
+
     # Needs json dumps for the frontend echarts
     import json
+
     categories_raw_json = json.dumps(summary.get("categories_raw", []))
-    
+
     yearly_expenses_json = json.dumps(yearly_daily_expenses(current_year()))
 
     return render(
         request,
         "analytics/dashboard.html",
         {
-            "summary": summary, 
+            "summary": summary,
             "period": period,
             "categories_raw_json": categories_raw_json,
             "yearly_expenses_json": yearly_expenses_json,
+            "accounts": get_accounts(),
+            "default_start_date": default_start_date,
+            "default_end_date": default_end_date,
         },
     )
 
 
 def reports_page(request):
-    month = request.GET.get("month") or current_month()
-    year = month[:4]
-    force = request.GET.get("refresh") == "1"
-
-    monthly = monthly_summary(month)
-    yearly = yearly_summary(year)
-    advice = generate_monthly_advice(month, force_refresh=force)
-
-    return render(
-        request,
-        "analytics/reports.html",
-        {
-            "month": month,
-            "year": year,
-            "monthly": monthly,
-            "yearly": yearly,
-            "advice": advice,
-            "prev_month": _adjacent_month(month, -1),
-            "next_month": _adjacent_month(month, +1),
-            "current_month": current_month(),
-        },
-    )
+    # Deprecated: reports page removed. Redirect to financial report.
+    return redirect("financial_report")
 
 
 def monthly_summary_api(request):

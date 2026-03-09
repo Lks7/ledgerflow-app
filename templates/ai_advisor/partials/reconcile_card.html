@@ -1,0 +1,41 @@
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+  <h3 class="form-card-title">智能平账预览</h3>
+  <span class="badge" style="background: #eef7f1; color: #1e7040; border: 1px solid #c8dbd0; font-size: 11px;">
+    PREVIEW
+  </span>
+</div>
+<p style="margin: 2px 0 16px; font-size: 13px; color: var(--muted);">账户：{{ account.name }}（{{ start_date }} ~ {{ end_date }}）</p>
+
+<div style="background: linear-gradient(to bottom right, #f8fbfd, #ffffff); border: 1px solid #e1eff8; border-radius: 12px; padding: 20px;">
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px;">
+    <div>收入合计：<strong>¥{{ preview.income_total|floatformat:2 }}</strong></div>
+    <div>支出合计：<strong>¥{{ preview.expense_total|floatformat:2 }}</strong></div>
+    <div>应变动：<strong>¥{{ preview.expected_change|floatformat:2 }}</strong></div>
+    <div>实变动：<strong>¥{{ preview.actual_change|floatformat:2 }}</strong></div>
+    <div>差额：<strong style="color:{% if preview.diff >= 0 %}#16a34a{% else %}#dc2626{% endif %};">{% if preview.diff > 0 %}+{% endif %}¥{{ preview.diff|floatformat:2 }}</strong></div>
+    <div>平账金额：<strong>¥{{ preview.adjustment_amount|floatformat:2 }}</strong></div>
+  </div>
+
+  {% if preview.entries %}
+  <div style="margin-bottom:14px;">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">将写入如下复式分录：</div>
+    <pre style="margin:0;background:#fff;border:1px solid #eef4f0;border-radius:8px;padding:10px;white-space:pre-wrap;">{{ preview.entries|safe }}</pre>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+    <button type="button" class="btn-ghost" hx-get="/ai/reconcile/form" hx-target="#ai-advice-container"
+      hx-swap="innerHTML" style="padding: 10px 14px; border-radius: 10px;">← 返回重选</button>
+    <form method="post" action="/ai/reconcile/commit" hx-post="/ai/reconcile/commit" hx-target="#ai-advice-container" hx-swap="innerHTML">
+      {% csrf_token %}
+      <input type="hidden" name="confirm" value="true" />
+      <button type="submit" class="btn-primary" style="padding: 10px 18px; border-radius: 10px;">✅ 确认并入库</button>
+    </form>
+  </div>
+  {% else %}
+  <div style="padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#475569;">该时间段无需平账，差额为 0。</div>
+  <div style="display:flex;justify-content:flex-start;margin-top:10px;">
+    <button type="button" class="btn-ghost" hx-get="/ai/reconcile/form" hx-target="#ai-advice-container"
+      hx-swap="innerHTML" style="padding: 10px 14px; border-radius: 10px;">← 返回重选</button>
+  </div>
+  {% endif %}
+</div>

@@ -21,6 +21,7 @@ class Account(models.Model):
     status = models.CharField(max_length=20, choices=STATUSES, default="active")
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    repayment_date = models.DateField(null=True, blank=True)
     note = models.CharField(max_length=500, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -50,6 +51,19 @@ class Category(models.Model):
     class Meta:
         db_table = "ledger_category"
         ordering = ["group", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Tag(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ledger_tag"
+        ordering = ["name"]
 
     def __str__(self):
         return self.name

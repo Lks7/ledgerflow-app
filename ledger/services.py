@@ -11,6 +11,7 @@ from .models import (
     Journal,
     JournalEntry,
     JournalLog,
+    Tag,
     JournalTransfer,
 )
 
@@ -33,6 +34,9 @@ def _account_to_dict(a: Account) -> dict:
         "status": a.status,
         "opening_balance": str(a.opening_balance),
         "balance": str(a.balance),
+        "repayment_date": (
+            a.repayment_date.isoformat() if getattr(a, "repayment_date", None) else ""
+        ),
         "note": a.note,
     }
 
@@ -105,6 +109,15 @@ COMMON_ACCOUNTS = [
         "id": "income",
         "name": "收入汇总",
         "type": "income",
+        "status": "active",
+        "currency": "CNY",
+        "opening_balance": "0.00",
+        "balance": "0.00",
+    },
+    {
+        "id": "reconcile_adjust",
+        "name": "平账调整账户",
+        "type": "asset",
         "status": "active",
         "currency": "CNY",
         "opening_balance": "0.00",
@@ -454,6 +467,9 @@ def create_journal(date, description, source, tags, entries, transfer_lines=None
                 note=t.get("note", ""),
             )
 
+        for tag_name in tag_list:
+            Tag.objects.get_or_create(name=tag_name)
+
         recalculate_account_balances()
 
     journal_dict = _journal_to_dict(journal)
@@ -565,6 +581,8 @@ def update_journal_metadata(journal_id: str, tags: str, category_id: str):
         journal.tags_raw = ",".join(tag_list)
         journal.save(update_fields=["tags_raw", "updated_at"])
         journal.entries.update(category_id=normalized_category_id)
+        for tag_name in tag_list:
+            Tag.objects.get_or_create(name=tag_name)
 
     jd = _journal_to_dict(journal)
     _append_journal_log("edit_meta", jd)
@@ -580,6 +598,7 @@ def create_account(
     account_type: str = "asset",
     currency: str = "CNY",
     opening_balance: str = "0",
+    repayment_date: str = "",
     note: str = "",
 ):
     account_name = (name or "").strip()
@@ -591,14 +610,20 @@ def create_account(
 
     start = _to_decimal(opening_balance)
     account_id = str(uuid.uuid4())
+    normalized_type = account_type or "asset"
+    normalized_repayment_date = (
+        (repayment_date or None) if normalized_type == "liability" else None
+    )
+
     account = Account.objects.create(
         id=account_id,
         name=account_name,
-        type=account_type or "asset",
+        type=normalized_type,
         status="active",
         currency=(currency or "CNY").upper(),
         opening_balance=start,
         balance=start,
+        repayment_date=normalized_repayment_date,
         note=note.strip(),
     )
     return _account_to_dict(account), ""
@@ -615,7 +640,12 @@ def account_used_count(account_id: str) -> int:
 
 
 def update_account(
-    account_id: str, name: str, account_type: str, currency: str = "CNY", note: str = ""
+    account_id: str,
+    name: str,
+    account_type: str,
+    currency: str = "CNY",
+    note: str = "",
+    repayment_date: str = "",
 ):
     if not name or not name.strip():
         return False, "账户名称不能为空。"
@@ -627,6 +657,10 @@ def update_account(
         if currency:
             acc.currency = currency.upper()
         acc.note = note.strip()
+        if acc.type == "liability":
+            acc.repayment_date = repayment_date or None
+        else:
+            acc.repayment_date = None
         acc.save()
         return True, ""
     except Account.DoesNotExist:
@@ -725,7 +759,7 @@ def list_journal_logs(limit: int = 200):
 
 
 def list_all_tags() -> list:
-    counts: dict[str, int] = {}
+    counts: dict[str, int] = {t.name: 0 for t in Tag.objects.all()}
     for j in Journal.objects.all():
         for tag in j.get_tags():
             counts[tag] = counts.get(tag, 0) + 1
@@ -745,6 +779,12 @@ def rename_tag(old: str, new: str) -> int:
                 j.set_tags([new if t == old else t for t in tags])
                 j.save()
                 count += 1
+        row = Tag.objects.filter(name=old).first()
+        if row:
+            row.name = new
+            row.save(update_fields=["name", "updated_at"])
+        else:
+            Tag.objects.get_or_create(name=new)
     return count
 
 
@@ -757,4 +797,5 @@ def delete_tag(tag: str) -> int:
                 j.set_tags([t for t in tags if t != tag])
                 j.save()
                 count += 1
+        Tag.objects.filter(name=tag).delete()
     return count

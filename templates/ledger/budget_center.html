@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}预算执行中心{% endblock %}
+{% block content %}
+<div class="report-page">
+  <div class="report-header">
+    <div>
+      <h2 class="page-title">🎯 预算执行中心</h2>
+      <p class="page-desc">按分类跟踪预算执行率，提前识别超支风险。</p>
+    </div>
+    <form method="get" action="/journals/budgets" style="display:flex;gap:8px;align-items:center;" id="budget-filter-form">
+      <select name="scope" class="form-select" style="width:110px;">
+        <option value="month" {% if scope == 'month' %}selected{% endif %}>月预算</option>
+        <option value="year" {% if scope == 'year' %}selected{% endif %}>年预算</option>
+      </select>
+      <input type="month" name="month" value="{{ month }}" class="form-input" style="width:140px;{% if scope != 'month' %}display:none;{% endif %}" id="month-input" />
+      <input type="number" name="year" value="{{ year }}" min="2000" max="2100" class="form-input" style="width:110px;{% if scope != 'year' %}display:none;{% endif %}" id="year-input" />
+      <button type="submit" class="btn-primary">查看</button>
+    </form>
+  </div>
+
+  <div class="stat-cards" style="margin-bottom:16px;">
+    <div class="stat-card stat-income">
+      <div class="stat-icon">💼</div>
+      <div class="stat-body">
+        <div class="stat-label">预算总额</div>
+        <div class="stat-value">¥{{ total_budget|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-expense">
+      <div class="stat-icon">💸</div>
+      <div class="stat-body">
+        <div class="stat-label">实际支出</div>
+        <div class="stat-value">¥{{ total_actual|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card {% if total_remain >= 0 %}stat-net-pos{% else %}stat-net-neg{% endif %}">
+      <div class="stat-icon">📊</div>
+      <div class="stat-body">
+        <div class="stat-label">预算结余</div>
+        <div class="stat-value">¥{{ total_remain|floatformat:2 }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-save">
+      <div class="stat-icon">🧮</div>
+      <div class="stat-body">
+        <div class="stat-label">执行率</div>
+        <div class="stat-value">{{ total_usage_pct|floatformat:1 }}%</div>
+        <div class="stat-sub">期末预测 ¥{{ forecast|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if warnings %}
+  <div class="form-card" style="margin-bottom:16px;">
+    <div class="form-card-header">
+      <span class="form-card-icon">⚠️</span>
+      <h3 class="form-card-title">{{ period_label }}预警</h3>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      {% for w in warnings %}
+      <span class="badge {% if w.status == '超预算' %}badge-expense{% endif %}">{{ w.name }} {{ w.usage_pct }}%</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📚</span>
+      <h3 class="form-card-title">分类{{ period_label }}明细</h3>
+      {% if scope == 'year' %}
+      <span class="badge">年预算 = 月预算 × 12</span>
+      {% endif %}
+    </div>
+    <div class="acc-table-wrap">
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>分类</th>
+            <th>分组</th>
+            <th>预算</th>
+            <th>实际</th>
+            <th>结余</th>
+            <th>执行率</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><strong>{{ r.name }}</strong></td>
+            <td>{{ r.group|default:'-' }}</td>
+            <td class="acc-num">¥{{ r.budget|floatformat:2 }}</td>
+            <td class="acc-num">¥{{ r.actual|floatformat:2 }}</td>
+            <td class="acc-num" style="color:{% if r.remain >= 0 %}#16a34a{% else %}#dc2626{% endif %};">¥{{ r.remain|floatformat:2 }}</td>
+            <td style="min-width:160px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="flex:1;height:8px;background:#eef2ef;border-radius:999px;overflow:hidden;">
+                  <div style="height:100%;width:{% if r.usage_pct > 100 %}100{% else %}{{ r.usage_pct }}{% endif %}%;background:{% if r.usage_pct >= 100 %}#dc2626{% elif r.usage_pct >= 80 %}#f59e0b{% else %}#16a34a{% endif %};"></div>
+                </div>
+                <span style="font-size:12px;color:#64748b;min-width:44px;text-align:right;">{{ r.usage_pct }}%</span>
+              </div>
+            </td>
+            <td>
+              {% if r.status == '超预算' %}
+              <span class="badge badge-expense">超预算</span>
+              {% elif r.status == '预警' %}
+              <span class="badge" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;">预警</span>
+              {% elif r.status == '未设预算' %}
+              <span class="badge">未设预算</span>
+              {% else %}
+              <span class="badge" style="background:#ecfdf3;color:#166534;border-color:#bbf7d0;">正常</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" style="text-align:center;color:#64748b;padding:26px;">暂无分类数据，请先在分类管理中设置分类与预算。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="form-card" style="margin-top:16px;">
+    <div class="form-card-header">
+      <span class="form-card-icon">📈</span>
+      <h3 class="form-card-title">{{ trend_year }} 年预算按月份趋势</h3>
+      <span class="badge">预算 vs 实际</span>
+    </div>
+    <div id="budgetTrendChart" style="height:320px;"></div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+  (function () {
+    var formEl = document.getElementById('budget-filter-form');
+    var scopeEl = document.querySelector('select[name="scope"]');
+    var monthInput = document.getElementById('month-input');
+    var yearInput = document.getElementById('year-input');
+    if (!scopeEl || !monthInput || !yearInput || !formEl) return;
+    function sync() {
+      var isYear = scopeEl.value === 'year';
+      monthInput.style.display = isYear ? 'none' : '';
+      yearInput.style.display = isYear ? '' : 'none';
+      monthInput.disabled = isYear;
+      yearInput.disabled = !isYear;
+    }
+    scopeEl.addEventListener('change', function () {
+      sync();
+      formEl.submit();
+    });
+    sync();
+  })();
+
+  (function () {
+    var trend = {{ trend_json|safe }};
+    var dom = document.getElementById('budgetTrendChart');
+    if (!dom || !window.echarts) return;
+    var chart = echarts.init(dom);
+    chart.setOption({
+      tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+      legend: { data: ['月预算', '月实际', '月差额'] },
+      grid: { left: 60, right: 20, top: 40, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        data: trend.map(function (x) { return x.month; })
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { formatter: '¥{value}' }
+      },
+      series: [
+        {
+          name: '月预算',
+          type: 'line',
+          smooth: true,
+          data: trend.map(function (x) { return x.budget; }),
+          lineStyle: { color: '#16a34a', width: 2 }
+        },
+        {
+          name: '月实际',
+          type: 'line',
+          smooth: true,
+          data: trend.map(function (x) { return x.actual; }),
+          lineStyle: { color: '#ef4444', width: 2 }
+        },
+        {
+          name: '月差额',
+          type: 'bar',
+          data: trend.map(function (x) { return x.diff; }),
+          itemStyle: {
+            color: function (params) {
+              return params.value >= 0 ? '#3b82f6' : '#f97316';
+            }
+          }
+        }
+      ]
+    });
+
+    window.addEventListener('resize', function () {
+      chart.resize();
+    });
+  })();
+</script>
+{% endblock %}

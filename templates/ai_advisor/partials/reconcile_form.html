@@ -1,0 +1,39 @@
+<div
+  style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 200px; padding: 40px 20px; text-align: center;">
+  <div style="font-size: 48px; margin-bottom: 16px;">⚖️</div>
+  <h3 style="margin: 0 0 8px; font-size: 18px; color: var(--ink);">智能平账</h3>
+  <p style="margin: 0 0 20px; font-size: 14px; color: var(--muted); max-width: 320px;">
+    选择账户和时间范围，系统会计算收入/支出差额，并生成平账建议。确认后自动入库到「平账调整账户」。</p>
+
+  <form method="post" action="/ai/reconcile/preview" hx-post="/ai/reconcile/preview" hx-target="#ai-advice-container"
+    hx-swap="innerHTML" hx-indicator="#ai-indicator"
+    style="width:100%;max-width:420px;display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left;">
+    {% csrf_token %}
+    <div style="grid-column:1 / span 2;">
+      <label class="form-label-sm">目标账户</label>
+      <select name="account_id" class="form-select" required>
+        {% for acc in accounts %}
+        <option value="{{ acc.id }}">{{ acc.name }}（{{ acc.type }}）</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label-sm">开始日期</label>
+      <input name="start_date" type="date" value="{{ default_start_date }}" class="form-input" />
+    </div>
+    <div>
+      <label class="form-label-sm">结束日期</label>
+      <input name="end_date" type="date" value="{{ default_end_date }}" class="form-input" required />
+    </div>
+    <div style="grid-column:1 / span 2;display:flex;justify-content:center;">
+      <button type="submit" class="btn-primary"
+        style="padding: 12px 24px; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
+        <span style="font-size: 16px;">✨</span> 生成平账建议
+      </button>
+    </div>
+  </form>
+
+  <div id="ai-indicator" class="htmx-indicator" style="margin-top: 16px; color: var(--brand); font-size: 14px;">
+    正在计算平账建议，请稍候... ⏳
+  </div>
+</div>

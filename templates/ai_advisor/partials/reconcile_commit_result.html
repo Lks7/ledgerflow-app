@@ -1,0 +1,19 @@
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;padding:24px;text-align:center;">
+  {% if ok %}
+  <div style="font-size:46px;margin-bottom:10px;">✅</div>
+  <h3 style="margin:0 0 8px;font-size:18px;color:#166534;">智能平账已完成</h3>
+  <p style="margin:0 0 14px;color:var(--muted);">{{ message }}</p>
+  {% if journal %}
+  <div style="font-size:13px;color:#64748b;">凭证号：{{ journal.id }} | 日期：{{ journal.date }}</div>
+  {% endif %}
+  {% else %}
+  <div style="font-size:46px;margin-bottom:10px;">❌</div>
+  <h3 style="margin:0 0 8px;font-size:18px;color:#991b1b;">智能平账失败</h3>
+  <p style="margin:0;color:var(--muted);">{{ message }}</p>
+  {% endif %}
+
+  <div style="margin-top:16px;">
+    <button type="button" class="btn-ghost" hx-get="/ai/reconcile/form" hx-target="#ai-advice-container"
+      hx-swap="innerHTML" style="padding:10px 14px;border-radius:10px;">← 继续平账</button>
+  </div>
+</div>

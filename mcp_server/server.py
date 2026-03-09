@@ -2,6 +2,8 @@ import json
 import os
 import sys
 import traceback
+from calendar import monthrange
+from datetime import date
 from typing import Any, Callable
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -19,6 +21,7 @@ from analytics.services import (  # noqa: E402
     summary_for_period,
     yearly_summary,
 )
+from django.db.models import Sum  # noqa: E402
 from ledger.services import (  # noqa: E402
     create_journal,
     delete_journal,
@@ -29,6 +32,7 @@ from ledger.services import (  # noqa: E402
     list_journals,
     update_journal,
 )
+from ledger.models import Category, JournalEntry  # noqa: E402
 from lists.services import (  # noqa: E402
     add_item,
     delete_item,
@@ -78,9 +82,39 @@ def tool_ledger_list_tags(_args: dict) -> dict:
 
 
 def tool_ledger_list_journals(args: dict) -> dict:
-    month = _required(args, "month")
+    month = (args.get("month") or "").strip()
     tag = (args.get("tag") or "").strip()
-    return {"ok": True, "journals": list_journals(month=month, tag=tag)}
+    account_id = (args.get("account_id") or "").strip()
+    category_id = (args.get("category_id") or "").strip()
+
+    rows = list_journals(month=month, tag=tag)
+
+    if account_id:
+        rows = [
+            j
+            for j in rows
+            if any(
+                (e.get("account_id") or "") == account_id
+                for e in (j.get("entries") or [])
+            )
+            or any(
+                (t.get("from_account_id") or "") == account_id
+                or (t.get("to_account_id") or "") == account_id
+                for t in (j.get("transfers") or [])
+            )
+        ]
+
+    if category_id:
+        rows = [
+            j
+            for j in rows
+            if any(
+                (e.get("category_id") or "") == category_id
+                for e in (j.get("entries") or [])
+            )
+        ]
+
+    return {"ok": True, "journals": rows}
 
 
 def tool_ledger_get_journal(args: dict) -> dict:
@@ -269,6 +303,270 @@ def tool_report_yearly(args: dict) -> dict:
     return {"ok": True, "summary": yearly_summary(year)}
 
 
+def tool_budget_center_summary(args: dict) -> dict:
+    scope = (args.get("scope") or "month").strip()
+    if scope not in {"month", "year"}:
+        raise ValueError("scope must be one of month/year")
+
+    month = (args.get("month") or date.today().strftime("%Y-%m")).strip()
+    year = (args.get("year") or date.today().strftime("%Y")).strip()
+
+    if scope == "month":
+        summary = monthly_summary(month)
+        actual_by_cat = {
+            (item.get("category_id") or ""): float(item.get("amount") or 0)
+            for item in summary.get("categories", [])
+        }
+        try:
+            trend_year = int(month.split("-")[0])
+        except Exception:
+            trend_year = date.today().year
+    else:
+        agg = (
+            JournalEntry.objects.filter(
+                journal__date__startswith=year,
+                account__type="expense",
+            )
+            .values("category_id")
+            .annotate(total=Sum("debit"))
+        )
+        actual_by_cat = {
+            (r.get("category_id") or ""): float(r.get("total") or 0) for r in agg
+        }
+        try:
+            trend_year = int(year)
+        except Exception:
+            trend_year = date.today().year
+
+    rows = []
+    total_budget = 0.0
+    total_actual = 0.0
+
+    for cat in Category.objects.order_by("group", "name"):
+        monthly_budget = float(cat.budget_monthly or 0)
+        budget = monthly_budget if scope == "month" else monthly_budget * 12
+        actual = actual_by_cat.get(cat.id, 0.0)
+        remain = budget - actual
+        usage_pct = (actual / budget * 100.0) if budget > 0 else 0.0
+
+        if budget <= 0:
+            status = "未设预算"
+        elif usage_pct >= 100:
+            status = "超预算"
+        elif usage_pct >= 80:
+            status = "预警"
+        else:
+            status = "正常"
+
+        rows.append(
+            {
+                "id": cat.id,
+                "name": cat.name,
+                "group": cat.group,
+                "budget": round(budget, 2),
+                "actual": round(actual, 2),
+                "remain": round(remain, 2),
+                "usage_pct": round(usage_pct, 1),
+                "status": status,
+            }
+        )
+        total_budget += budget
+        total_actual += actual
+
+    rows.sort(
+        key=lambda x: (x["status"] != "超预算", x["status"] != "预警", -x["actual"])
+    )
+
+    monthly_budget_total = float(
+        sum(float(c.budget_monthly or 0) for c in Category.objects.all())
+    )
+    month_actual_map = {
+        int(r["journal__date__month"]): float(r["total"] or 0)
+        for r in JournalEntry.objects.filter(
+            journal__date__year=trend_year,
+            account__type="expense",
+        )
+        .values("journal__date__month")
+        .annotate(total=Sum("debit"))
+    }
+    trend = [
+        {
+            "month": f"{m:02d}",
+            "budget": round(monthly_budget_total, 2),
+            "actual": round(month_actual_map.get(m, 0.0), 2),
+            "diff": round(monthly_budget_total - month_actual_map.get(m, 0.0), 2),
+        }
+        for m in range(1, 13)
+    ]
+
+    return {
+        "ok": True,
+        "scope": scope,
+        "month": month,
+        "year": year,
+        "trend_year": trend_year,
+        "period_label": "月预算" if scope == "month" else "年预算",
+        "total_budget": round(total_budget, 2),
+        "total_actual": round(total_actual, 2),
+        "total_remain": round(total_budget - total_actual, 2),
+        "total_usage_pct": round((total_actual / total_budget * 100.0), 1)
+        if total_budget > 0
+        else 0.0,
+        "warnings": [r for r in rows if r["status"] in {"超预算", "预警"}],
+        "rows": rows,
+        "trend": trend,
+    }
+
+
+def _add_months(ym: str, offset: int) -> str:
+    y, m = map(int, ym.split("-"))
+    m += offset
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    return f"{y:04d}-{m:02d}"
+
+
+def _date_with_day(ym: str, day: int) -> str:
+    y, m = map(int, ym.split("-"))
+    d = max(1, min(day, monthrange(y, m)[1]))
+    return f"{y:04d}-{m:02d}-{d:02d}"
+
+
+def tool_ledger_create_rent_template(args: dict) -> dict:
+    idempotency_key = (args.get("idempotency_key") or "").strip()
+
+    pay_date = _required(args, "pay_date")
+    start_month = _required(args, "start_month")
+    from_account_id = _required(args, "from_account_id")
+    prepaid_account_id = _required(args, "prepaid_account_id")
+    deposit_account_id = (args.get("deposit_account_id") or "").strip()
+    category_id = (args.get("category_id") or "").strip()
+    tags = (args.get("tags") or "房租").strip()
+    note = (args.get("note") or "").strip()
+
+    monthly_rent = float(args.get("monthly_rent") or 0)
+    months_count = int(args.get("months_count") or 3)
+    deposit_amount = float(args.get("deposit_amount") or 0)
+
+    if monthly_rent <= 0 or months_count <= 0:
+        return {"ok": False, "error": "monthly_rent and months_count must be > 0"}
+    if deposit_amount > 0 and not deposit_account_id:
+        return {
+            "ok": False,
+            "error": "deposit_account_id is required when deposit_amount > 0",
+        }
+
+    pay_day = int(pay_date.split("-")[-1])
+    total_prepaid = round(monthly_rent * months_count, 2)
+    total_amount = round(total_prepaid + deposit_amount, 2)
+
+    initial_entries = [
+        {
+            "account_id": prepaid_account_id,
+            "category_id": "",
+            "debit": f"{total_prepaid:.2f}",
+            "credit": "0.00",
+            "currency": "CNY",
+            "note": "房租预付",
+        },
+        {
+            "account_id": from_account_id,
+            "category_id": "",
+            "debit": "0.00",
+            "credit": f"{total_amount:.2f}",
+            "currency": "CNY",
+            "note": "房租付款",
+        },
+    ]
+    if deposit_amount > 0:
+        initial_entries.insert(
+            1,
+            {
+                "account_id": deposit_account_id,
+                "category_id": "",
+                "debit": f"{deposit_amount:.2f}",
+                "credit": "0.00",
+                "currency": "CNY",
+                "note": "租房押金",
+            },
+        )
+
+    def _run() -> dict:
+        created = []
+        j0, err = create_journal(
+            date=pay_date,
+            description=f"房租付款（押{int(deposit_amount // monthly_rent) if monthly_rent else 0}付{months_count}）",
+            source="template_rent",
+            tags=f"{tags},房租模板",
+            entries=initial_entries,
+            transfer_lines=[],
+        )
+        if err:
+            return {"ok": False, "error": err}
+        created.append(j0.get("id"))
+
+        for i in range(months_count):
+            ym = _add_months(start_month, i)
+            d = _date_with_day(ym, pay_day)
+            entries = [
+                {
+                    "account_id": "expense",
+                    "category_id": category_id,
+                    "debit": f"{monthly_rent:.2f}",
+                    "credit": "0.00",
+                    "currency": "CNY",
+                    "note": f"房租分摊 {ym} {note}".strip(),
+                },
+                {
+                    "account_id": prepaid_account_id,
+                    "category_id": "",
+                    "debit": "0.00",
+                    "credit": f"{monthly_rent:.2f}",
+                    "currency": "CNY",
+                    "note": f"房租分摊 {ym}",
+                },
+            ]
+            jx, errx = create_journal(
+                date=d,
+                description=f"房租分摊 {ym}",
+                source="template_rent",
+                tags=f"{tags},房租分摊",
+                entries=entries,
+                transfer_lines=[],
+            )
+            if errx:
+                return {"ok": False, "error": errx, "created_ids": created}
+            created.append(jx.get("id"))
+
+        return {"ok": True, "created_count": len(created), "journal_ids": created}
+
+    if idempotency_key:
+        return run_with_idempotency(
+            tool_name="ledger.create_rent_template",
+            idempotency_key=idempotency_key,
+            args_for_hash={
+                "pay_date": pay_date,
+                "start_month": start_month,
+                "from_account_id": from_account_id,
+                "prepaid_account_id": prepaid_account_id,
+                "deposit_account_id": deposit_account_id,
+                "category_id": category_id,
+                "tags": tags,
+                "note": note,
+                "monthly_rent": monthly_rent,
+                "months_count": months_count,
+                "deposit_amount": deposit_amount,
+            },
+            runner=_run,
+        )
+
+    return _run()
+
+
 TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
     "ledger.get_accounts": (
         {
@@ -297,14 +595,18 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
     "ledger.list_journals": (
         {
             "name": "ledger.list_journals",
-            "description": "List journals by month and optional tag",
+            "description": "List journals with optional filters",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "month": {"type": "string", "description": "YYYY-MM"},
+                    "month": {
+                        "type": "string",
+                        "description": "YYYY-MM; empty for all",
+                    },
                     "tag": {"type": "string"},
+                    "account_id": {"type": "string"},
+                    "category_id": {"type": "string"},
                 },
-                "required": ["month"],
             },
         },
         tool_ledger_list_journals,
@@ -567,6 +869,53 @@ TOOLS: dict[str, tuple[dict, Callable[[dict], dict]]] = {
             },
         },
         tool_report_yearly,
+    ),
+    "report.budget_center_summary": (
+        {
+            "name": "report.budget_center_summary",
+            "description": "Get budget center summary with monthly trend",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "scope": {"type": "string", "enum": ["month", "year"]},
+                    "month": {"type": "string", "description": "YYYY-MM"},
+                    "year": {"type": "string", "description": "YYYY"},
+                },
+            },
+        },
+        tool_budget_center_summary,
+    ),
+    "ledger.create_rent_template": (
+        {
+            "name": "ledger.create_rent_template",
+            "description": "Create rent journals for deposit and monthly amortization",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "idempotency_key": {"type": "string"},
+                    "pay_date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "start_month": {"type": "string", "description": "YYYY-MM"},
+                    "from_account_id": {"type": "string"},
+                    "prepaid_account_id": {"type": "string"},
+                    "deposit_account_id": {"type": "string"},
+                    "category_id": {"type": "string"},
+                    "tags": {"type": "string"},
+                    "note": {"type": "string"},
+                    "monthly_rent": {"type": "number"},
+                    "months_count": {"type": "integer"},
+                    "deposit_amount": {"type": "number"},
+                },
+                "required": [
+                    "pay_date",
+                    "start_month",
+                    "from_account_id",
+                    "prepaid_account_id",
+                    "monthly_rent",
+                    "months_count",
+                ],
+            },
+        },
+        tool_ledger_create_rent_template,
     ),
 }
 

@@ -2,14 +2,17 @@ import csv
 import io
 import json
 import zipfile
-from datetime import datetime
+from datetime import date, datetime
+from calendar import monthrange
 
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Sum
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import redirect, render
 
 from ai_advisor.models import AIAdviceSnapshot, AIConfig
+from ai_advisor.services import generate_monthly_advice
 from analytics.services import monthly_summary, yearly_summary
 from lists.models import ShoppingItem
 
@@ -19,6 +22,7 @@ from .models import (
     Journal,
     JournalEntry,
     JournalLog,
+    Tag,
     JournalTransfer,
 )
 
@@ -72,17 +76,41 @@ def journal_list(request):
 
     month = request.GET.get("month", "").strip()
     tag = request.GET.get("tag", "").strip()
+    account_id = request.GET.get("account_id", "").strip()
+    filter_category_id = request.GET.get("category_id", "").strip()
     current_month = datetime.now().strftime("%Y-%m")
     month_for_nav = month or current_month
     prev_month = _month_shift(month_for_nav, -1)
     next_month = _month_shift(month_for_nav, 1)
     raw_journals = list_journals(month)
     tags = sorted({t for j in raw_journals for t in (j.get("tags") or [])})
-    account_map = {x.get("id"): x.get("name") for x in get_accounts()}
+    accounts = get_accounts()
+    account_map = {x.get("id"): x.get("name") for x in accounts}
     categories = get_categories()
     category_map = {x.get("id"): x.get("name") for x in categories}
     journals = []
     for journal in list_journals(month, tag=tag):
+        if account_id:
+            has_account = any(
+                e.get("account_id") == account_id
+                for e in (journal.get("entries") or [])
+            )
+            has_transfer_account = any(
+                (t.get("from_account_id") == account_id)
+                or (t.get("to_account_id") == account_id)
+                for t in (journal.get("transfers") or [])
+            )
+            if not has_account and not has_transfer_account:
+                continue
+
+        if filter_category_id:
+            has_category = any(
+                (e.get("category_id") or "") == filter_category_id
+                for e in (journal.get("entries") or [])
+            )
+            if not has_category:
+                continue
+
         entries = []
         primary_category_id = ""
         for entry in journal.get("entries", []):
@@ -121,7 +149,10 @@ def journal_list(request):
     context = {
         "month": month,
         "tag": tag,
+        "account_id": account_id,
+        "category_id": filter_category_id,
         "tags": tags,
+        "accounts": accounts,
         "categories": categories,
         "journals": journals,
         "current_month": current_month,
@@ -149,6 +180,7 @@ def journal_new(request):
         "today": datetime.now().strftime("%Y-%m-%d"),
         "accounts": get_active_accounts(),
         "categories": get_categories(),
+        "existing_tags": [x.get("tag") for x in list_all_tags()],
         "default_currency": "CNY",
         "prefill_desc": prefill_desc,
         "prefill_tags": prefill_tags,
@@ -157,6 +189,161 @@ def journal_new(request):
         "prefill_json": prefill_json,
     }
     return render(request, "ledger/journal_new.html", context)
+
+
+def rent_template_new(request):
+    accounts = get_active_accounts()
+    asset_accounts = [a for a in accounts if a.get("type") == "asset"]
+    payment_accounts = [a for a in accounts if a.get("type") in {"asset", "liability"}]
+    today = datetime.now().strftime("%Y-%m-%d")
+    month_start = datetime.now().strftime("%Y-%m")
+    context = {
+        "today": today,
+        "month_start": month_start,
+        "payment_accounts": payment_accounts,
+        "asset_accounts": asset_accounts,
+        "categories": get_categories(),
+    }
+    return render(request, "ledger/rent_template.html", context)
+
+
+def _add_months(ym: str, offset: int) -> str:
+    y, m = map(int, ym.split("-"))
+    m += offset
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    return f"{y:04d}-{m:02d}"
+
+
+def _date_with_day(ym: str, day: int) -> str:
+    y, m = map(int, ym.split("-"))
+    d = max(1, min(day, monthrange(y, m)[1]))
+    return f"{y:04d}-{m:02d}-{d:02d}"
+
+
+def rent_template_create(request):
+    if request.method != "POST":
+        return HttpResponseBadRequest("只支持 POST")
+
+    pay_date = (request.POST.get("pay_date") or "").strip()
+    start_month = (request.POST.get("start_month") or "").strip()
+    from_account_id = (request.POST.get("from_account_id") or "").strip()
+    prepaid_account_id = (request.POST.get("prepaid_account_id") or "").strip()
+    deposit_account_id = (request.POST.get("deposit_account_id") or "").strip()
+    category_id = (request.POST.get("category_id") or "").strip()
+    tags = (request.POST.get("tags") or "房租").strip()
+    note = (request.POST.get("note") or "").strip()
+
+    try:
+        monthly_rent = float(request.POST.get("monthly_rent") or 0)
+        months_count = int(request.POST.get("months_count") or 3)
+        deposit_amount = float(request.POST.get("deposit_amount") or 0)
+    except Exception:
+        messages.error(request, "金额或期数格式不正确")
+        return redirect("rent_template_new")
+
+    if not pay_date or not start_month or not from_account_id or not prepaid_account_id:
+        messages.error(request, "请填写完整的模板参数")
+        return redirect("rent_template_new")
+    if monthly_rent <= 0 or months_count <= 0:
+        messages.error(request, "月租和期数必须大于 0")
+        return redirect("rent_template_new")
+    if deposit_amount > 0 and not deposit_account_id:
+        messages.error(request, "有押金时必须选择押金账户")
+        return redirect("rent_template_new")
+
+    pay_day = int(pay_date.split("-")[-1])
+    total_prepaid = round(monthly_rent * months_count, 2)
+    total_amount = round(total_prepaid + deposit_amount, 2)
+
+    initial_entries = [
+        {
+            "account_id": prepaid_account_id,
+            "category_id": "",
+            "debit": f"{total_prepaid:.2f}",
+            "credit": "0.00",
+            "currency": "CNY",
+            "note": "房租预付",
+        },
+        {
+            "account_id": from_account_id,
+            "category_id": "",
+            "debit": "0.00",
+            "credit": f"{total_amount:.2f}",
+            "currency": "CNY",
+            "note": "房租付款",
+        },
+    ]
+    if deposit_amount > 0:
+        initial_entries.insert(
+            1,
+            {
+                "account_id": deposit_account_id,
+                "category_id": "",
+                "debit": f"{deposit_amount:.2f}",
+                "credit": "0.00",
+                "currency": "CNY",
+                "note": "租房押金",
+            },
+        )
+
+    created = []
+    try:
+        with transaction.atomic():
+            j0, err = create_journal(
+                date=pay_date,
+                description=f"房租付款（押{int(deposit_amount // monthly_rent) if monthly_rent else 0}付{months_count}）",
+                source="template_rent",
+                tags=f"{tags},房租模板",
+                entries=initial_entries,
+                transfer_lines=[],
+            )
+            if err:
+                raise ValueError(f"模板记账失败：{err}")
+            created.append(j0.get("id"))
+
+            for i in range(months_count):
+                ym = _add_months(start_month, i)
+                d = _date_with_day(ym, pay_day)
+                entries = [
+                    {
+                        "account_id": "expense",
+                        "category_id": category_id,
+                        "debit": f"{monthly_rent:.2f}",
+                        "credit": "0.00",
+                        "currency": "CNY",
+                        "note": f"房租分摊 {ym} {note}".strip(),
+                    },
+                    {
+                        "account_id": prepaid_account_id,
+                        "category_id": "",
+                        "debit": "0.00",
+                        "credit": f"{monthly_rent:.2f}",
+                        "currency": "CNY",
+                        "note": f"房租分摊 {ym}",
+                    },
+                ]
+                jx, errx = create_journal(
+                    date=d,
+                    description=f"房租分摊 {ym}",
+                    source="template_rent",
+                    tags=f"{tags},房租分摊",
+                    entries=entries,
+                    transfer_lines=[],
+                )
+                if errx:
+                    raise ValueError(f"房租分摊生成失败：{errx}")
+                created.append(jx.get("id"))
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("rent_template_new")
+
+    messages.success(request, f"房租模板已生成 {len(created)} 笔凭证")
+    return redirect("journal_list")
 
 
 def _entry_from_request(request, index: int):
@@ -250,7 +437,12 @@ def journal_create(request):
             "today": date,
             "accounts": get_active_accounts(),
             "categories": get_categories(),
+            "existing_tags": [x.get("tag") for x in list_all_tags()],
             "default_currency": "CNY",
+            "prefill_desc": description,
+            "prefill_tags": tags,
+            "prefill_source": source,
+            "prefill_amount": amount,
             "error": error,
         }
         messages.error(request, f"记账失败：{error}")
@@ -374,6 +566,7 @@ def account_create(request):
         account_type=request.POST.get("type", "asset"),
         currency=request.POST.get("currency", "CNY"),
         opening_balance=request.POST.get("opening_balance", "0"),
+        repayment_date=request.POST.get("repayment_date", ""),
         note=request.POST.get("note", ""),
     )
     if error:
@@ -470,7 +663,10 @@ def account_update(request):
     account_type = request.POST.get("type", "asset")
     currency = request.POST.get("currency", "CNY")
     note = request.POST.get("note", "")
-    ok, error = update_account(account_id, name, account_type, currency, note)
+    repayment_date = request.POST.get("repayment_date", "")
+    ok, error = update_account(
+        account_id, name, account_type, currency, note, repayment_date
+    )
     if not ok:
         accounts = _accounts_with_usage()
         messages.error(request, f"更新账户失败：{error}")
@@ -507,9 +703,11 @@ def _month_shift(month: str, delta: int) -> str:
 def financial_report(request):
     month = request.GET.get("month") or datetime.now().strftime("%Y-%m")
     year = month[:4]
+    force = request.GET.get("refresh") == "1"
 
     monthly = monthly_summary(month)
     yearly = yearly_summary(year)
+    advice = generate_monthly_advice(month, force_refresh=force)
 
     prev_month = _month_shift(month, -1)
     next_month = _month_shift(month, 1)
@@ -569,8 +767,144 @@ def financial_report(request):
         "prev_month": prev_month,
         "next_month": next_month,
         "current_month": current_month,
+        "advice": advice,
     }
     return render(request, "ledger/financial_report.html", context)
+
+
+def budget_center(request):
+    scope = (request.GET.get("scope") or "month").strip()
+    if scope not in {"month", "year"}:
+        scope = "month"
+
+    month = request.GET.get("month") or datetime.now().strftime("%Y-%m")
+    year = request.GET.get("year") or datetime.now().strftime("%Y")
+
+    try:
+        trend_year = int(year if scope == "year" else month.split("-")[0])
+    except Exception:
+        trend_year = date.today().year
+
+    if scope == "month":
+        summary = monthly_summary(month)
+        actual_by_cat = {
+            (item.get("category_id") or ""): float(item.get("amount") or 0)
+            for item in summary.get("categories", [])
+        }
+    else:
+        rows = (
+            JournalEntry.objects.filter(
+                journal__date__startswith=year,
+                account__type="expense",
+            )
+            .values("category_id")
+            .annotate(total=Sum("debit"))
+        )
+        actual_by_cat = {
+            (r.get("category_id") or ""): float(r.get("total") or 0) for r in rows
+        }
+
+    rows = []
+    total_budget = 0.0
+    total_actual = 0.0
+
+    for cat in Category.objects.order_by("group", "name"):
+        monthly_budget = float(cat.budget_monthly or 0)
+        budget = monthly_budget if scope == "month" else monthly_budget * 12
+        actual = actual_by_cat.get(cat.id, 0.0)
+        remain = budget - actual
+        usage_pct = (actual / budget * 100.0) if budget > 0 else 0.0
+
+        if budget <= 0:
+            status = "未设预算"
+        elif usage_pct >= 100:
+            status = "超预算"
+        elif usage_pct >= 80:
+            status = "预警"
+        else:
+            status = "正常"
+
+        rows.append(
+            {
+                "id": cat.id,
+                "name": cat.name,
+                "group": cat.group,
+                "budget": round(budget, 2),
+                "actual": round(actual, 2),
+                "remain": round(remain, 2),
+                "usage_pct": round(usage_pct, 1),
+                "status": status,
+            }
+        )
+        total_budget += budget
+        total_actual += actual
+
+    rows.sort(
+        key=lambda x: (x["status"] != "超预算", x["status"] != "预警", -x["actual"])
+    )
+
+    try:
+        y, m = map(int, month.split("-"))
+    except Exception:
+        today = date.today()
+        y, m = today.year, today.month
+
+    today = date.today()
+    if scope == "month":
+        days = monthrange(y, m)[1]
+        elapsed = days if (today.year != y or today.month != m) else max(1, today.day)
+        forecast = (total_actual / elapsed) * days if elapsed > 0 else total_actual
+    else:
+        try:
+            year_int = int(year)
+        except Exception:
+            year_int = today.year
+        elapsed_months = 12 if today.year != year_int else max(1, today.month)
+        forecast = (
+            (total_actual / elapsed_months) * 12 if elapsed_months > 0 else total_actual
+        )
+
+    total_usage_pct = (total_actual / total_budget * 100.0) if total_budget > 0 else 0.0
+
+    monthly_budget_total = float(
+        sum(float(c.budget_monthly or 0) for c in Category.objects.all())
+    )
+    month_actual_map = {
+        int(r["journal__date__month"]): float(r["total"] or 0)
+        for r in JournalEntry.objects.filter(
+            journal__date__year=trend_year,
+            account__type="expense",
+        )
+        .values("journal__date__month")
+        .annotate(total=Sum("debit"))
+    }
+    trend = [
+        {
+            "month": f"{m:02d}",
+            "budget": round(monthly_budget_total, 2),
+            "actual": round(month_actual_map.get(m, 0.0), 2),
+            "diff": round(monthly_budget_total - month_actual_map.get(m, 0.0), 2),
+        }
+        for m in range(1, 13)
+    ]
+
+    context = {
+        "scope": scope,
+        "month": month,
+        "year": year,
+        "trend_year": trend_year,
+        "rows": rows,
+        "total_budget": round(total_budget, 2),
+        "total_actual": round(total_actual, 2),
+        "total_remain": round(total_budget - total_actual, 2),
+        "total_usage_pct": round(total_usage_pct, 1),
+        "forecast": round(forecast, 2),
+        "forecast_over": round(forecast - total_budget, 2),
+        "warnings": [r for r in rows if r["status"] in {"超预算", "预警"}],
+        "period_label": ("月预算" if scope == "month" else "年预算"),
+        "trend_json": json.dumps(trend),
+    }
+    return render(request, "ledger/budget_center.html", context)
 
 
 # ── Journal Edit ────────────────────────────────────────────────────────────
@@ -736,7 +1070,9 @@ def account_export_csv(request):
     response["Content-Disposition"] = 'attachment; filename="accounts.csv"'
 
     writer = csv.writer(response)
-    writer.writerow(["账户名", "类型", "币种", "期初金额", "当前余额", "状态"])
+    writer.writerow(
+        ["账户名", "类型", "币种", "期初金额", "当前余额", "还款日期", "状态"]
+    )
     type_map = {
         "asset": "资产",
         "liability": "负债",
@@ -752,6 +1088,7 @@ def account_export_csv(request):
                 a.get("currency", "CNY"),
                 a.get("opening_balance", "0.00"),
                 a.get("balance", "0.00"),
+                a.get("repayment_date", ""),
                 status_map.get(a.get("status", ""), a.get("status", "")),
             ]
         )
@@ -768,6 +1105,9 @@ def data_export_json(request):
             "status": a.status,
             "opening_balance": str(a.opening_balance),
             "balance": str(a.balance),
+            "repayment_date": (
+                a.repayment_date.isoformat() if a.repayment_date else ""
+            ),
             "note": a.note,
         }
         for a in Account.objects.all()
@@ -784,6 +1124,8 @@ def data_export_json(request):
         }
         for c in Category.objects.all()
     ]
+
+    tags = [{"name": t.name} for t in Tag.objects.all()]
 
     journals = []
     for j in Journal.objects.all().prefetch_related("entries", "transfers"):
@@ -872,6 +1214,7 @@ def data_export_json(request):
         "exported_at": datetime.now().isoformat(),
         "accounts": accounts,
         "categories": categories,
+        "tags": tags,
         "journals": journals,
         "shopping_items": shopping_items,
         "ai_config": ai_config,
@@ -928,6 +1271,7 @@ def data_import_json(request):
             ShoppingItem.objects.all().delete()
             AIAdviceSnapshot.objects.all().delete()
             AIConfig.objects.all().delete()
+            Tag.objects.all().delete()
             Category.objects.all().delete()
             Account.objects.all().delete()
 
@@ -940,6 +1284,7 @@ def data_import_json(request):
                     status=a.get("status", "active"),
                     opening_balance=a.get("opening_balance", "0"),
                     balance=a.get("balance", "0"),
+                    repayment_date=(a.get("repayment_date") or None),
                     note=a.get("note", ""),
                 )
 
@@ -957,6 +1302,11 @@ def data_import_json(request):
             for cid, pid in parent_map.items():
                 if pid and Category.objects.filter(id=pid).exists():
                     Category.objects.filter(id=cid).update(parent_id=pid)
+
+            for t in payload.get("tags", []):
+                name = (t.get("name") or "").strip()
+                if name:
+                    Tag.objects.get_or_create(name=name)
 
             for j in payload.get("journals", []):
                 journal = Journal.objects.create(

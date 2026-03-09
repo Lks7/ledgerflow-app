@@ -144,23 +144,9 @@
     <div id="expense-pie-chart" style="width: 100%; height: 280px;"></div>
   </div>
 
-  <!-- 右栏：AI 消费建议 -->
+  <!-- 右栏：智能平账 -->
   <div class="form-card" style="margin-bottom: 0;" id="ai-advice-container">
-    <div
-      style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 200px; padding: 40px 20px; text-align: center;">
-      <div style="font-size: 48px; margin-bottom: 16px;">🤖</div>
-      <h3 style="margin: 0 0 8px; font-size: 18px; color: var(--ink);">AI 消费分析</h3>
-      <p style="margin: 0 0 24px; font-size: 14px; color: var(--muted); max-width: 250px;">
-        点击按钮，获取随身人工智能财务顾问对您本月消费的深度洞察与建议。</p>
-      <button class="btn-primary" hx-get="/ai/advice_ui?month={{ summary.month|default:'' }}"
-        hx-target="#ai-advice-container" hx-swap="innerHTML" hx-indicator="#ai-indicator"
-        style="padding: 12px 24px; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;">
-        <span style="font-size: 16px;">✨</span> 开始分析
-      </button>
-      <div id="ai-indicator" class="htmx-indicator" style="margin-top: 16px; color: var(--brand); font-size: 14px;">
-        正在请求 AI 进行深度分析，请稍候... ⏳
-      </div>
-    </div>
+    {% include 'ai_advisor/partials/reconcile_form.html' %}
   </div>
 
 </section>

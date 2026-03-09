@@ -39,6 +39,16 @@ python -m venv .venv
 .venv/Scripts/python.exe manage.py test
 ```
 
+## 项目初始化脚本（清空账本交易数据）
+
+保留：账户、分类、标签
+
+清空：交易明细、记账日志、购物清单、AI 快照、幂等记录
+
+```bash
+.venv/Scripts/python.exe manage.py init_book --yes
+```
+
 ## MCP Server（给 AI 客户端调用）
 
 已内置一个基于 stdio 的 MCP 服务，支持记账、购物清单和报表查询。

@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}房租模板记账{% endblock %}
+{% block content %}
+<section class="journal-page" style="max-width:900px;margin:0 auto;">
+  <div class="page-header">
+    <div class="page-header-text">
+      <h2 class="page-title">🏠 房租模板（押一付三）</h2>
+      <p class="page-desc">一次生成付款凭证 + 每月分摊凭证，避免月度报表失真。</p>
+    </div>
+    <div class="header-actions">
+      <a href="/journals/new" class="btn-ghost">← 返回新增记账</a>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <form method="post" action="/journals/templates/rent/create" class="form-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label-sm">付款日期</label>
+        <input type="date" name="pay_date" value="{{ today }}" class="form-input" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">分摊起始月份</label>
+        <input type="month" name="start_month" value="{{ month_start }}" class="form-input" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">月租金额</label>
+        <input type="number" step="0.01" min="0.01" name="monthly_rent" value="3000" class="form-input" required />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label-sm">支付期数</label>
+        <input type="number" min="1" max="24" name="months_count" value="3" class="form-input" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">押金金额</label>
+        <input type="number" step="0.01" min="0" name="deposit_amount" value="3000" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">支出分类</label>
+        <select name="category_id" class="form-select">
+          <option value="">无分类</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label-sm">支付账户</label>
+        <select name="from_account_id" class="form-select" required>
+          <option value="">请选择</option>
+          {% for acc in payment_accounts %}
+          <option value="{{ acc.id }}">{{ acc.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">预付房租账户（资产）</label>
+        <select name="prepaid_account_id" class="form-select" required>
+          <option value="">请选择</option>
+          {% for acc in asset_accounts %}
+          <option value="{{ acc.id }}">{{ acc.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">押金账户（资产）</label>
+        <select name="deposit_account_id" class="form-select">
+          <option value="">无押金/不记录</option>
+          {% for acc in asset_accounts %}
+          <option value="{{ acc.id }}">{{ acc.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group" style="grid-column: 1 / span 2;">
+        <label class="form-label-sm">标签</label>
+        <input name="tags" value="房租" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">备注</label>
+        <input name="note" placeholder="如：XX小区12栋" class="form-input" />
+      </div>
+
+      <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+        <a href="/journals/new" class="btn-ghost">取消</a>
+        <button type="submit" class="btn-primary-lg">生成房租凭证</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

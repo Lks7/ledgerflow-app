@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import datetime
+from decimal import Decimal
 
 from django.conf import settings
 from django.db.utils import OperationalError, ProgrammingError
@@ -8,6 +9,172 @@ import httpx
 from google import genai
 
 from analytics.services import monthly_summary
+from ledger.services import create_journal
+
+
+def _to_decimal(v) -> Decimal:
+    try:
+        return Decimal(str(v or "0"))
+    except Exception:
+        return Decimal("0")
+
+
+def _account_net_change(account: dict, journals: list) -> Decimal:
+    account_id = account.get("id")
+    account_type = account.get("type")
+    net = Decimal("0")
+    for j in journals:
+        for e in j.get("entries", []):
+            if e.get("account_id") != account_id:
+                continue
+            debit = _to_decimal(e.get("debit"))
+            credit = _to_decimal(e.get("credit"))
+            if account_type in {"asset", "expense"}:
+                net += debit - credit
+            else:
+                net += credit - debit
+    return net
+
+
+def build_reconcile_preview(account: dict, journals: list):
+    net_change = _account_net_change(account, journals)
+
+    income_total = Decimal("0")
+    expense_total = Decimal("0")
+    for j in journals:
+        for e in j.get("entries", []):
+            debit = _to_decimal(e.get("debit"))
+            credit = _to_decimal(e.get("credit"))
+            if e.get("account_id") == "income" and credit > 0:
+                income_total += credit
+            if e.get("account_id") == "expense" and debit > 0:
+                expense_total += debit
+
+    expected_change = income_total - expense_total
+    diff = expected_change - net_change
+    adjustment_amount = abs(diff)
+
+    target_account_id = account.get("id")
+    target_currency = (account.get("currency") or "CNY").upper()
+    desc = (
+        f"AI平账调整-{account.get('name')}-"
+        f"{journals[-1].get('date') if journals else ''}"
+    )
+
+    if adjustment_amount == 0:
+        entries = []
+    else:
+        if account.get("type") in {"asset", "expense"}:
+            if diff > 0:
+                # target account should increase
+                entries = [
+                    {
+                        "account_id": target_account_id,
+                        "category_id": "",
+                        "debit": str(adjustment_amount),
+                        "credit": "0.00",
+                        "currency": target_currency,
+                        "note": "AI平账补差",
+                    },
+                    {
+                        "account_id": "reconcile_adjust",
+                        "category_id": "",
+                        "debit": "0.00",
+                        "credit": str(adjustment_amount),
+                        "currency": target_currency,
+                        "note": "AI平账对冲",
+                    },
+                ]
+            else:
+                entries = [
+                    {
+                        "account_id": target_account_id,
+                        "category_id": "",
+                        "debit": "0.00",
+                        "credit": str(adjustment_amount),
+                        "currency": target_currency,
+                        "note": "AI平账冲减",
+                    },
+                    {
+                        "account_id": "reconcile_adjust",
+                        "category_id": "",
+                        "debit": str(adjustment_amount),
+                        "credit": "0.00",
+                        "currency": target_currency,
+                        "note": "AI平账对冲",
+                    },
+                ]
+        else:
+            if diff > 0:
+                entries = [
+                    {
+                        "account_id": target_account_id,
+                        "category_id": "",
+                        "debit": "0.00",
+                        "credit": str(adjustment_amount),
+                        "currency": target_currency,
+                        "note": "AI平账补差",
+                    },
+                    {
+                        "account_id": "reconcile_adjust",
+                        "category_id": "",
+                        "debit": str(adjustment_amount),
+                        "credit": "0.00",
+                        "currency": target_currency,
+                        "note": "AI平账对冲",
+                    },
+                ]
+            else:
+                entries = [
+                    {
+                        "account_id": target_account_id,
+                        "category_id": "",
+                        "debit": str(adjustment_amount),
+                        "credit": "0.00",
+                        "currency": target_currency,
+                        "note": "AI平账冲减",
+                    },
+                    {
+                        "account_id": "reconcile_adjust",
+                        "category_id": "",
+                        "debit": "0.00",
+                        "credit": str(adjustment_amount),
+                        "currency": target_currency,
+                        "note": "AI平账对冲",
+                    },
+                ]
+
+    return {
+        "account_id": target_account_id,
+        "account_name": account.get("name"),
+        "income_total": float(income_total),
+        "expense_total": float(expense_total),
+        "expected_change": float(expected_change),
+        "actual_change": float(net_change),
+        "diff": float(diff),
+        "adjustment_amount": float(adjustment_amount),
+        "entries": entries,
+        "description": desc,
+    }
+
+
+def commit_reconcile(preview: dict, end_date: str):
+    entries = preview.get("entries") or []
+    if not entries:
+        return {"ok": True, "journal": None, "message": "无需平账"}
+
+    journal, error = create_journal(
+        date=end_date,
+        description=preview.get("description") or "AI平账调整",
+        source="ai_reconcile",
+        tags="AI平账",
+        entries=entries,
+        transfer_lines=[],
+    )
+    if error:
+        return {"ok": False, "error": error}
+    return {"ok": True, "journal": journal, "message": "平账已入库"}
+
 
 from .models import AIAdviceSnapshot, AIConfig
 

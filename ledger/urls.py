@@ -5,6 +5,10 @@ from . import views
 urlpatterns = [
     path("", views.journal_list, name="journal_list"),
     path("new", views.journal_new, name="journal_new"),
+    path("templates/rent", views.rent_template_new, name="rent_template_new"),
+    path(
+        "templates/rent/create", views.rent_template_create, name="rent_template_create"
+    ),
     path("create", views.journal_create, name="journal_create"),
     path("delete", views.journal_delete, name="journal_delete"),
     path(
@@ -22,6 +26,7 @@ urlpatterns = [
     path("accounts/export/csv", views.account_export_csv, name="account_export_csv"),
     path("data/export", views.data_export_json, name="data_export_json"),
     path("data/import", views.data_import_json, name="data_import_json"),
+    path("budgets", views.budget_center, name="budget_center"),
     path("reports", views.financial_report, name="financial_report"),
     path("logs", views.journal_logs, name="journal_logs"),
     path("tags", views.tag_settings, name="tag_settings"),

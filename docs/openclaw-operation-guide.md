@@ -1,17 +1,24 @@
-# OpenClaw 操作文档（LedgerFlow MCP）
+# OpenClaw 使用手册（LedgerFlow 远程 MCP）
 
-本文档用于指导你在 OpenClaw 中接入并使用 LedgerFlow 的远程 MCP 服务，实现 AI 记账、购物清单管理、报表查询等操作。
+> 目标读者：OpenClaw 配置者、Prompt 维护者、日常使用者。
+>
+> 目标：让 OpenClaw 稳定完成“记账、查账、购物清单管理、报表分析”等全流程操作。
 
-## 1. 目标与架构
+---
 
-- 目标：在 OpenClaw 中通过自然语言调用 LedgerFlow 的业务能力。
-- 协议：`streamablehttp`
-- 端点：`https://book.524120.xyz/mcp/http`
-- 鉴权：`MCP_API_TOKEN`（推荐必填）
+## 1. 系统说明
 
-## 2. 服务器端准备
+LedgerFlow 已提供远程 MCP 接口，OpenClaw 通过该接口调用工具完成业务操作。
 
-### 2.1 更新代码并重建
+- 协议类型：`streamablehttp`
+- MCP 端点：`https://book.524120.xyz/mcp/http`
+- 鉴权方式：`Authorization: Bearer <MCP_API_TOKEN>`（推荐必填）
+
+---
+
+## 2. 部署前检查（服务器）
+
+在服务器执行：
 
 ```bash
 cd ~/server/ledgerflow-app
@@ -19,44 +26,63 @@ git pull
 docker compose up -d --build
 ```
 
-### 2.2 设置 MCP 访问令牌
-
-编辑 `.env`，增加或更新：
+编辑 `.env`，确认有：
 
 ```env
 MCP_API_TOKEN=replace-with-a-strong-random-token
 ```
 
-重启容器：
+重启服务：
 
 ```bash
 docker compose restart
 ```
 
-### 2.3 健康检查（推荐）
+---
+
+## 3. 接口联通验证
+
+先不用 OpenClaw，直接验证 MCP 接口可用。
+
+### 3.1 列出工具
 
 ```bash
-curl -X POST "https://book.524120.xyz/mcp/http" \
+curl -s -X POST "https://book.524120.xyz/mcp/http" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer replace-with-a-strong-random-token" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-返回 `200` 且包含 `tools` 列表即表示 MCP 服务可用。
+预期：返回 `tools` 数组，工具名如 `ledger_get_accounts`（下划线命名）。
 
-## 3. OpenClaw 连接配置
+### 3.2 调用一个工具
 
-在 OpenClaw 新增 MCP 服务：
+```bash
+curl -s -X POST "https://book.524120.xyz/mcp/http" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer replace-with-a-strong-random-token" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ledger_get_accounts","arguments":{}}}'
+```
+
+预期：返回账户列表。
+
+---
+
+## 4. OpenClaw 配置方式
+
+在 OpenClaw 新增 MCP 服务时使用：
 
 - 类型：`streamablehttp`
 - URL：`https://book.524120.xyz/mcp/http`
-- Token：`MCP_API_TOKEN` 对应值
+- Token：`MCP_API_TOKEN` 的值
 
-> 注意：不要选 `sse`，否则会出现 `405` 错误。
+> 不要用 `sse`，否则会报 405。
 
-## 4. 可用工具清单（首批）
+---
 
-### 4.1 记账
+## 5. 工具清单（当前可用）
+
+### 5.1 记账相关
 
 - `ledger_get_accounts`
 - `ledger_get_categories`
@@ -65,200 +91,263 @@ curl -X POST "https://book.524120.xyz/mcp/http" \
 - `ledger_get_journal`
 - `ledger_create_journal`
 - `ledger_update_journal`
-- `ledger_delete_journal`（需要 `confirm=true`）
+- `ledger_delete_journal`（必须 `confirm=true`）
+- `ledger_create_rent_template`（房租押一付三模板）
 
-### 4.2 购物清单
+### 5.2 购物清单相关
 
 - `shopping_list_items`
 - `shopping_add_item`
 - `shopping_update_item`
 - `shopping_update_status`
-- `shopping_delete_item`（需要 `confirm=true`）
+- `shopping_delete_item`（必须 `confirm=true`）
 - `shopping_pending_summary`
 
-### 4.3 报表
+### 5.3 报表相关
 
 - `report_monthly_summary`
-- `report_period_summary`
+- `report_period_summary`（`day/week/month/year`）
 - `report_yearly_summary`
+- `report_budget_center_summary`
 
-## 5. 幂等键（防重复提交）
+---
 
-以下写工具支持 `idempotency_key`：
+## 6. OpenClaw 运行规则（必须遵守）
+
+这一节是“操作行为标准”，建议作为 OpenClaw 的项目级系统规则。
+
+1. 任何写操作前先确认关键参数（日期、账户、金额、分类）。
+2. 写操作必须尽量携带 `idempotency_key` 防重复提交。
+3. 删除操作必须显式传 `confirm=true`。
+4. 记账分录必须借贷平衡（借方总额 = 贷方总额）。
+5. 查账缺省时间时：默认查询当月（`YYYY-MM`），但允许空月份查询全量。
+6. 看报表缺省周期时：默认 `report_period_summary(period="month")`。
+
+---
+
+## 7. 幂等键（防重复记账）
+
+支持幂等键的工具：
 
 - `ledger_create_journal`
 - `shopping_add_item`
-
-建议在客户端每次写请求都携带一个唯一键（如 UUID）：
-
-- 同一个 `idempotency_key` + 同参数：返回第一次结果（避免重复记账）
-- 同一个 `idempotency_key` + 不同参数：返回冲突错误
-
-## 6. OpenClaw 推荐测试话术
-
-### 6.1 连通性
-
-- “请调用 `ledger_get_accounts`，列出账户名称和余额。”
-
-### 6.2 记账闭环
-
-1) 新增一笔：
-
-- “请调用 `ledger_create_journal` 新增记账：
-  - date: `2026-03-01`
-  - description: `午餐`
-  - tags: `餐饮,工作日`
-  - idempotency_key: `test-journal-001`
-  - entries:
-    - `{account_id: "expense", debit: "32", credit: "0", currency: "CNY"}`
-    - `{account_id: "wechat", debit: "0", credit: "32", currency: "CNY"}`
-  ”
-
-2) 查询确认：
-
-- “请调用 `ledger_list_journals`，month=`2026-03`，找出 `午餐` 这条记录并返回 journal_id。”
-
-### 6.3 购物清单
-
-- “请调用 `shopping_add_item`，新增：蓝牙耳机，qty=1，est_price=299，actual_price=259，priority=high，platform=京东，idempotency_key=`test-shopping-001`。”
-
-### 6.4 报表
-
-- “请调用 `report_period_summary`，period=`month`，用 5 条要点总结当前月消费情况。”
-
-## 7. 常见问题排查
-
-### 7.1 `SSE error: Non-200 status code (405)`
-
-- 原因：MCP 类型选成了 `sse`
-- 处理：改为 `streamablehttp`
-
-### 7.2 `Invalid function.name pattern`
-
-- 原因：客户端缓存了旧工具定义
-- 处理：删除并重新添加 MCP 服务，重启 OpenClaw 后重试
-
-### 7.3 `JSON.parse: unexpected end of data`
-
-- 原因：客户端解析空响应体
-- 处理：确保服务端已更新到最新版本（已对通知返回 JSON 兼容）
-
-### 7.4 401 unauthorized
-
-- 原因：Token 错误或缺失
-- 处理：核对 OpenClaw Token 与服务器 `.env` 中 `MCP_API_TOKEN` 是否一致
-
-## 8. 安全建议
-
-- 生产环境务必设置 `MCP_API_TOKEN`
-- 定期轮换 token
-- 删除/导入类操作保留二次确认（`confirm=true`）
-- 对外网访问建议配合 IP 白名单或 WAF
-
-## 9. 运维命令
-
-```bash
-# 查看容器状态
-docker compose ps
-
-# 查看日志
-docker compose logs -f
-
-# 重建部署
-docker compose up -d --build
-
-# 仅重启服务
-docker compose restart
-```
-
-## 10. 给 OpenClaw 的操作规范（重点）
-
-这一节是给 OpenClaw 直接执行 LedgerFlow 的“行为规则”，建议你在 OpenClaw 的系统提示词/项目指令中粘贴使用。
-
-### 10.1 总目标
-
-- 通过 MCP 工具完成记账、查账、购物清单管理、报表分析。
-- 优先使用已有数据（账户、分类、标签），避免凭空创建不存在的值。
-- 所有写操作先校验参数，失败时返回可执行修复建议。
-
-### 10.2 工具调用顺序规则
-
-1. 记账前必须先调用：
-   - `ledger_get_accounts`
-   - `ledger_get_categories`
-2. 若用户只说“查账”，默认调用：
-   - `ledger_list_journals`（当月）
-3. 若用户要“统计”，默认调用：
-   - `report_period_summary`（`period=month`）
-4. 写操作必须附带 `idempotency_key`，避免重复提交。
-
-### 10.3 写操作安全规则
-
-- 删除操作必须二次确认：`confirm=true`。
-- 金额必须是字符串数字，且保留两位小数（如 `"32.00"`）。
-- `ledger_create_journal` 的 `entries` 必须借贷平衡。
-- 同一个 `idempotency_key` 不得复用到不同参数请求。
-
-## 11. 给 OpenClaw 的可复制系统提示词
-
-把下面这段直接粘贴到 OpenClaw 的项目系统提示词中：
-
-```text
-你是 LedgerFlow 财务助理，只能通过 MCP 工具操作记账系统。
+- `ledger_create_rent_template`
 
 规则：
-1) 涉及新增/修改/删除数据时，优先确认关键参数：日期、账户、金额、分类、标签。
-2) 每次写操作都生成并传递 idempotency_key（UUID 风格），防止重复提交。
-3) 删除操作必须显式传 confirm=true。
-4) 记账分录必须借贷平衡，不平衡时不要提交，先提示用户修正。
-5) 若用户说“查账”但未给时间，默认查询当月（YYYY-MM）。
-6) 若用户说“看报表”，默认调用 report_period_summary(period=month)。
-7) 返回结果要中文简洁，包含关键金额、账户、分类与下一步建议。
 
-常用工具：
-- 账户/分类：ledger_get_accounts, ledger_get_categories
-- 记账：ledger_create_journal, ledger_list_journals, ledger_update_journal, ledger_delete_journal
-- 清单：shopping_add_item, shopping_list_items, shopping_update_status
-- 报表：report_monthly_summary, report_period_summary, report_yearly_summary
+- 同一个 `idempotency_key` + 同参数：返回首次结果（`idempotency_replay=true`）
+- 同一个 `idempotency_key` + 不同参数：返回冲突错误
+
+建议：OpenClaw 每次写操作都生成一个新 UUID 作为 `idempotency_key`。
+
+---
+
+## 8. 操作模板（OpenClaw 应该怎么做）
+
+### 8.1 新增记账（标准流程）
+
+用户输入：
+
+> “帮我记一笔：微信午餐 32 元，分类餐饮，标签工作日”
+
+OpenClaw 推荐执行顺序：
+
+1. `ledger_get_accounts`（确认 `wechat`、`expense` 存在）
+2. `ledger_get_categories`（找到“餐饮”对应分类）
+3. `ledger_create_journal`（写入）
+
+建议参数结构：
+
+```json
+{
+  "date": "2026-03-01",
+  "description": "午餐",
+  "source": "mcp",
+  "tags": "餐饮,工作日",
+  "idempotency_key": "journal-20260301-001",
+  "entries": [
+    {"account_id": "expense", "category_id": "food", "debit": "32.00", "credit": "0.00", "currency": "CNY", "note": "午餐"},
+    {"account_id": "wechat", "category_id": "food", "debit": "0.00", "credit": "32.00", "currency": "CNY", "note": "午餐"}
+  ],
+  "transfer_lines": []
+}
 ```
 
-## 12. 常见任务的标准执行模板
+### 8.2 查询当月交易
 
-### 12.1 用户说“记一笔：微信花了32元吃午饭，分类餐饮”
+用户输入：
 
-OpenClaw 应执行：
+> “查一下这个月的账单”
 
-1. 调 `ledger_get_accounts`，确认 `wechat`、`expense` 存在。
-2. 调 `ledger_get_categories`，查到“餐饮”对应的分类 ID（如有）。
-3. 调 `ledger_create_journal`：
-   - `date`: 今日
-   - `description`: `午饭`
-   - `tags`: `餐饮`
-   - `idempotency_key`: 新 UUID
-   - `entries`:
-     - 借：`expense` 32.00
-     - 贷：`wechat` 32.00
-4. 用自然语言返回“已记账成功 + 凭证摘要”。
+OpenClaw 调用：
 
-### 12.2 用户说“看看我这个月花了多少”
+```json
+{
+  "name": "ledger_list_journals",
+  "arguments": {
+    "month": "2026-03"
+  }
+}
+```
 
-OpenClaw 应执行：
+也支持组合过滤（账户/分类/标签）：
 
-1. 调 `report_period_summary`，参数 `period=month`
-2. 返回：本月收入、支出、净额、储蓄率、前三消费分类。
+```json
+{
+  "name": "ledger_list_journals",
+  "arguments": {
+    "month": "2026-03",
+    "account_id": "wechat",
+    "category_id": "food",
+    "tag": "餐饮"
+  }
+}
+```
 
-### 12.3 用户说“把刚才那条删掉”
+### 8.3 修改某笔记账
 
-OpenClaw 应执行：
+流程：
 
-1. 先通过 `ledger_list_journals` 或上下文拿到 `journal_id`
-2. 调 `ledger_delete_journal`，并设置 `confirm=true`
-3. 返回删除结果与剩余记录提示。
+1. 先 `ledger_list_journals` 找到 `journal_id`
+2. 再 `ledger_get_journal` 取原始结构
+3. 修改需要变更字段后调用 `ledger_update_journal`
 
-## 13. 对话层推荐问法（你可直接对 OpenClaw 说）
+### 8.4 删除某笔记账
 
-- “帮我记一笔：支付宝买咖啡18元，分类餐饮，标签通勤。”
-- “查询本月所有交易，按金额从高到低列出前10条。”
-- “把今天那笔‘午餐’改成35元。”
-- “新增购物项：洗衣液，预算59，实际49，平台京东。”
-- “给我一个本周和本月的消费对比。”
+必须包含：`confirm=true`
+
+```json
+{
+  "name": "ledger_delete_journal",
+  "arguments": {
+    "month": "2026-03",
+    "journal_id": "xxx",
+    "confirm": true
+  }
+}
+```
+
+### 8.5 新增购物项
+
+```json
+{
+  "name": "shopping_add_item",
+  "arguments": {
+    "name": "洗衣液",
+    "qty": 1,
+    "est_price": 59,
+    "actual_price": 49,
+    "priority": "normal",
+    "planned_date": "2026-03-02",
+    "platform": "京东",
+    "note": "日用品补货",
+    "idempotency_key": "shopping-20260302-001"
+  }
+}
+```
+
+### 8.6 查询报表
+
+默认月报：
+
+```json
+{
+  "name": "report_period_summary",
+  "arguments": {
+    "period": "month"
+  }
+}
+```
+
+### 8.7 查询预算执行中心（含年预算趋势）
+
+```json
+{
+  "name": "report_budget_center_summary",
+  "arguments": {
+    "scope": "year",
+    "year": "2026"
+  }
+}
+```
+
+返回包含：预算总额、实际总额、预警分类、12个月预算/实际/差额趋势数据。
+
+### 8.8 房租押一付三模板
+
+```json
+{
+  "name": "ledger_create_rent_template",
+  "arguments": {
+    "pay_date": "2026-03-01",
+    "start_month": "2026-03",
+    "from_account_id": "wechat",
+    "prepaid_account_id": "general",
+    "deposit_account_id": "alipay",
+    "category_id": "housing",
+    "monthly_rent": 3000,
+    "months_count": 3,
+    "deposit_amount": 3000,
+    "tags": "房租",
+    "note": "XX小区",
+    "idempotency_key": "rent-20260301-001"
+  }
+}
+```
+
+说明：会自动生成 1 笔付款凭证 + 3 笔月度分摊凭证。
+
+---
+
+## 9. 推荐用户问法（给 OpenClaw）
+
+- “记一笔：支付宝买咖啡 18 元，分类餐饮，标签通勤。”
+- “帮我查这个月所有餐饮相关支出。”
+- “把今天那笔午餐从 32 改成 35。”
+- “新增购物项：蓝牙耳机，预算 299，实际 259，平台京东。”
+- “给我看本周和本月消费对比。”
+- “帮我查微信账户 3 月餐饮交易。”
+- “给我看 2026 年预算执行情况和预警分类。”
+- “按押一付三生成房租模板，月租 3000 押金 3000。”
+
+---
+
+## 10. 常见错误与解决
+
+### 10.1 `SSE error: 405`
+
+- 原因：类型选成 `sse`
+- 解决：改为 `streamablehttp`
+
+### 10.2 `Invalid function.name pattern`
+
+- 原因：客户端缓存旧工具
+- 解决：删除 MCP 服务并重建；重启 OpenClaw
+
+### 10.3 `JSON.parse unexpected end`
+
+- 原因：客户端解析空 body
+- 解决：更新到当前服务端版本（已做兼容）
+
+### 10.4 `401 unauthorized`
+
+- 原因：Token 错误/缺失
+- 解决：核对 OpenClaw Token 与 `.env` 的 `MCP_API_TOKEN`
+
+---
+
+## 11. 安全与运维建议
+
+- 生产环境务必设置强随机 `MCP_API_TOKEN`
+- 建议定期轮换 token
+- 外网访问建议配合 IP 白名单或 WAF
+- 所有写操作保留幂等键与确认参数
+
+常用命令：
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose restart
+docker compose up -d --build
+```
