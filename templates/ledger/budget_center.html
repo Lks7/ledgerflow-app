@@ -18,6 +18,8 @@
     </form>
   </div>
 
+  <div style="margin-bottom:12px;color:#64748b;font-size:13px;">{{ budget_note }}</div>
+
   <div class="stat-cards" style="margin-bottom:16px;">
     <div class="stat-card stat-income">
       <div class="stat-icon">💼</div>
@@ -78,6 +80,7 @@
           <tr>
             <th>分类</th>
             <th>分组</th>
+            <th>子分类数</th>
             <th>预算</th>
             <th>实际</th>
             <th>结余</th>
@@ -90,6 +93,7 @@
           <tr>
             <td><strong>{{ r.name }}</strong></td>
             <td>{{ r.group|default:'-' }}</td>
+            <td class="acc-num">{{ r.children_count }}</td>
             <td class="acc-num">¥{{ r.budget|floatformat:2 }}</td>
             <td class="acc-num">¥{{ r.actual|floatformat:2 }}</td>
             <td class="acc-num" style="color:{% if r.remain >= 0 %}#16a34a{% else %}#dc2626{% endif %};">¥{{ r.remain|floatformat:2 }}</td>
@@ -115,7 +119,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" style="text-align:center;color:#64748b;padding:26px;">暂无分类数据，请先在分类管理中设置分类与预算。</td>
+            <td colspan="8" style="text-align:center;color:#64748b;padding:26px;">暂无分类数据，请先在分类管理中设置分类与预算。</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -785,6 +785,21 @@ def budget_center(request):
     except Exception:
         trend_year = date.today().year
 
+    categories_all = list(Category.objects.all())
+    category_by_id = {c.id: c for c in categories_all}
+
+    def _root_id(category_id: str) -> str:
+        current = category_by_id.get(category_id)
+        if not current:
+            return category_id or ""
+        while current and current.parent_id:
+            parent = category_by_id.get(current.parent_id)
+            if not parent:
+                # Parent broken/missing, fallback to current itself.
+                return current.id
+            current = parent
+        return current.id if current else (category_id or "")
+
     if scope == "month":
         summary = monthly_summary(month)
         actual_by_cat = {
@@ -804,14 +819,39 @@ def budget_center(request):
             (r.get("category_id") or ""): float(r.get("total") or 0) for r in rows
         }
 
+    grouped_by_root = {}
+    for c in categories_all:
+        rid = _root_id(c.id)
+        if not rid:
+            continue
+        grouped_by_root.setdefault(rid, []).append(c)
+
+    budget_by_root = {}
+    for rid, items in grouped_by_root.items():
+        child_budget_sum = sum(
+            float(c.budget_monthly or 0) for c in items if c.id != rid
+        )
+        root_obj = category_by_id.get(rid)
+        root_budget = float(root_obj.budget_monthly or 0) if root_obj else 0.0
+        budget_by_root[rid] = child_budget_sum if child_budget_sum > 0 else root_budget
+
+    actual_by_root = {}
+    for cid, amount in actual_by_cat.items():
+        rid = _root_id(cid)
+        if not rid:
+            continue
+        actual_by_root[rid] = actual_by_root.get(rid, 0.0) + amount
+
+    roots = [c for c in categories_all if not c.parent_id]
+
     rows = []
     total_budget = 0.0
     total_actual = 0.0
 
-    for cat in Category.objects.order_by("group", "name"):
-        monthly_budget = float(cat.budget_monthly or 0)
+    for cat in sorted(roots, key=lambda x: (x.group or "", x.name or "")):
+        monthly_budget = budget_by_root.get(cat.id, 0.0)
         budget = monthly_budget if scope == "month" else monthly_budget * 12
-        actual = actual_by_cat.get(cat.id, 0.0)
+        actual = actual_by_root.get(cat.id, 0.0)
         remain = budget - actual
         usage_pct = (actual / budget * 100.0) if budget > 0 else 0.0
 
@@ -829,6 +869,9 @@ def budget_center(request):
                 "id": cat.id,
                 "name": cat.name,
                 "group": cat.group,
+                "children_count": sum(
+                    1 for c in categories_all if c.parent_id == cat.id
+                ),
                 "budget": round(budget, 2),
                 "actual": round(actual, 2),
                 "remain": round(remain, 2),
@@ -866,9 +909,7 @@ def budget_center(request):
 
     total_usage_pct = (total_actual / total_budget * 100.0) if total_budget > 0 else 0.0
 
-    monthly_budget_total = float(
-        sum(float(c.budget_monthly or 0) for c in Category.objects.all())
-    )
+    monthly_budget_total = float(sum(float(v or 0) for v in budget_by_root.values()))
     month_actual_map = {
         int(r["journal__date__month"]): float(r["total"] or 0)
         for r in JournalEntry.objects.filter(
@@ -902,6 +943,7 @@ def budget_center(request):
         "forecast_over": round(forecast - total_budget, 2),
         "warnings": [r for r in rows if r["status"] in {"超预算", "预警"}],
         "period_label": ("月预算" if scope == "month" else "年预算"),
+        "budget_note": "仅展示父分类预算；优先使用子分类预算之和，若子分类都未设置预算则回退父分类预算。",
         "trend_json": json.dumps(trend),
     }
     return render(request, "ledger/budget_center.html", context)
@@ -1424,6 +1466,39 @@ def tag_delete(request):
 
 def category_settings(request):
     flat = list_categories_with_usage()
+
+    by_id = {c["id"]: c for c in flat}
+
+    def _root_id(cid: str) -> str:
+        current = by_id.get(cid)
+        if not current:
+            return cid
+        while current.get("parent_id"):
+            parent = by_id.get(current.get("parent_id"))
+            if not parent:
+                return current.get("id")
+            current = parent
+        return current.get("id")
+
+    grouped = {}
+    for c in flat:
+        rid = _root_id(c.get("id"))
+        grouped.setdefault(rid, []).append(c)
+
+    for c in flat:
+        if c.get("parent_id"):
+            c["effective_budget_monthly"] = c.get("budget_monthly", "0.00")
+            c["effective_from_children"] = False
+            continue
+
+        rid = c.get("id")
+        children = [x for x in grouped.get(rid, []) if x.get("id") != rid]
+        child_sum = sum(float(x.get("budget_monthly") or 0) for x in children)
+        root_budget = float(c.get("budget_monthly") or 0)
+        effective = child_sum if child_sum > 0 else root_budget
+        c["effective_budget_monthly"] = f"{effective:.2f}"
+        c["effective_from_children"] = child_sum > 0
+
     tree = build_category_tree(flat)
     # Collect unique groups for display
     groups = sorted({c["group"] for c in flat if c.get("group")})

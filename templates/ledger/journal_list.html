@@ -86,13 +86,13 @@
           </span>
         </div>
         <div class="row" style="gap: 8px;">
-          <a href="/journals/edit/{{ month }}/{{ j.id }}" class="btn-ghost btn-sm"
+          <a href="/journals/edit/{{ j.date|slice:':7' }}/{{ j.id }}" class="btn-ghost btn-sm"
             style="padding: 7px 12px; background: #fff;">
             ✏️ 编辑
           </a>
           <form method="post" action="/journals/delete" style="margin: 0;" onsubmit="return confirm('确定要删除这条明细吗？');">
             {% csrf_token %}
-            <input type="hidden" name="month" value="{{ month }}" />
+            <input type="hidden" name="month" value="{{ j.date|slice:':7' }}" />
             <input type="hidden" name="journal_id" value="{{ j.id }}" />
             <button type="submit" class="btn-ghost-danger btn-sm"
               style="padding: 7px 12px; border-radius: 8px; cursor: pointer; background: #fff; border: 1px solid #fee2e2;">
