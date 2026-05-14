@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+  {% block extra_head %}{% endblock %}
 </head>
 
 <body>
@@ -28,6 +29,8 @@
         <a href="/journals/reports" class="{% if request.path == '/journals/reports' or request.path == '/journals/logs' %}active{% endif %}">财务报表</a>
         <a href="/ai/config" class="{% if request.path == '/ai/config' %}active{% endif %}">AI配置</a>
         <a href="/lists/" class="{% if request.path == '/lists/' %}active{% endif %}">购物清单</a>
+        <a href="/lists/subscriptions" class="{% if request.path == '/lists/subscriptions' %}active{% endif %}">订阅服务</a>
+        <a href="/todos/" class="{% if request.path == '/todos/' %}active{% endif %}">待办事项</a>
         <!-- 分析报告入口已合并到财务报表 -->
       </nav>
     </aside>

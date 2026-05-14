@@ -8,12 +8,18 @@ from django.views.decorators.http import require_POST
 from .services import (
     add_item,
     ai_analyze_items,
+    create_subscription,
     delete_item,
+    delete_subscription,
     get_item,
     list_items,
+    list_subscriptions,
     pending_summary,
+    renew_subscription,
+    subscription_summary,
     update_item,
     update_status,
+    update_subscription,
 )
 
 
@@ -26,6 +32,78 @@ def shopping_list(request):
         "today": datetime.now().strftime("%Y-%m-%d"),
     }
     return render(request, "lists/shopping_list.html", context)
+
+
+def subscription_list(request):
+    status = request.GET.get("status", "")
+    context = {
+        "status": status,
+        "items": list_subscriptions(status),
+        "summary": subscription_summary(),
+        "today": datetime.now().strftime("%Y-%m-%d"),
+    }
+    return render(request, "lists/subscription_list.html", context)
+
+
+def subscription_create(request):
+    if request.method != "POST":
+        return HttpResponseBadRequest("只支持 POST")
+    create_subscription(
+        name=request.POST.get("name", ""),
+        service_type=request.POST.get("service_type", ""),
+        billing_cycle=request.POST.get("billing_cycle", "monthly"),
+        custom_days=request.POST.get("custom_days", "30"),
+        price=request.POST.get("price", "0"),
+        start_date=request.POST.get("start_date", datetime.now().strftime("%Y-%m-%d")),
+        next_renewal_date=request.POST.get(
+            "next_renewal_date", datetime.now().strftime("%Y-%m-%d")
+        ),
+        expiry_date=request.POST.get("expiry_date", ""),
+        note=request.POST.get("note", ""),
+    )
+    messages.success(request, "订阅服务已添加")
+    return redirect("subscription_list")
+
+
+@require_POST
+def subscription_update(request):
+    ok = update_subscription(
+        item_id=request.POST.get("item_id", ""),
+        name=request.POST.get("name", ""),
+        service_type=request.POST.get("service_type", ""),
+        billing_cycle=request.POST.get("billing_cycle", "monthly"),
+        custom_days=request.POST.get("custom_days", "30"),
+        price=request.POST.get("price", "0"),
+        start_date=request.POST.get("start_date", datetime.now().strftime("%Y-%m-%d")),
+        next_renewal_date=request.POST.get(
+            "next_renewal_date", datetime.now().strftime("%Y-%m-%d")
+        ),
+        expiry_date=request.POST.get("expiry_date", ""),
+        status=request.POST.get("status", "active"),
+        note=request.POST.get("note", ""),
+    )
+    if not ok:
+        messages.error(request, "更新失败：未找到订阅服务")
+        return HttpResponseBadRequest("未找到订阅服务")
+    messages.success(request, "订阅服务已更新")
+    return redirect("subscription_list")
+
+
+@require_POST
+def subscription_delete(request):
+    delete_subscription(request.POST.get("item_id", ""))
+    messages.success(request, "订阅服务已删除")
+    return redirect("subscription_list")
+
+
+@require_POST
+def subscription_renew(request):
+    ok = renew_subscription(request.POST.get("item_id", ""))
+    if not ok:
+        messages.error(request, "续订失败：未找到订阅服务")
+        return HttpResponseBadRequest("未找到订阅服务")
+    messages.success(request, "订阅日期已自动顺延")
+    return redirect("subscription_list")
 
 
 def shopping_create(request):

@@ -8,7 +8,128 @@ from django.conf import settings
 from django.db.models import Sum, F
 from google import genai
 
-from .models import ShoppingItem
+from .models import ShoppingItem, SubscriptionService
+
+
+def _subscription_to_dict(item: SubscriptionService) -> dict:
+    return {
+        "id": item.id,
+        "name": item.name,
+        "service_type": item.service_type,
+        "billing_cycle": item.billing_cycle,
+        "custom_days": item.custom_days,
+        "price": float(item.price or 0),
+        "start_date": item.start_date.isoformat() if item.start_date else "",
+        "next_renewal_date": item.next_renewal_date.isoformat()
+        if item.next_renewal_date
+        else "",
+        "expiry_date": item.expiry_date.isoformat() if item.expiry_date else "",
+        "status": item.status,
+        "note": item.note,
+        "created_at": item.created_at.isoformat() if item.created_at else "",
+        "updated_at": item.updated_at.isoformat() if item.updated_at else "",
+    }
+
+
+def list_subscriptions(status: str = ""):
+    qs = SubscriptionService.objects.all()
+    if status:
+        qs = qs.filter(status=status)
+    return [_subscription_to_dict(x) for x in qs]
+
+
+def create_subscription(
+    name,
+    service_type,
+    billing_cycle,
+    custom_days,
+    price,
+    start_date,
+    next_renewal_date,
+    expiry_date="",
+    note="",
+):
+    item = SubscriptionService.objects.create(
+        id=str(uuid.uuid4()),
+        name=(name or "").strip(),
+        service_type=(service_type or "").strip(),
+        billing_cycle=billing_cycle or "monthly",
+        custom_days=int(custom_days or 30),
+        price=Decimal(str(price or "0")),
+        start_date=(start_date or None),
+        next_renewal_date=next_renewal_date,
+        expiry_date=(expiry_date or None),
+        note=note or "",
+    )
+    return _subscription_to_dict(item)
+
+
+def update_subscription(
+    item_id: str,
+    name,
+    service_type,
+    billing_cycle,
+    custom_days,
+    price,
+    start_date,
+    next_renewal_date,
+    expiry_date="",
+    status="active",
+    note="",
+):
+    try:
+        item = SubscriptionService.objects.get(id=item_id)
+    except SubscriptionService.DoesNotExist:
+        return False
+    item.name = (name or "").strip()
+    item.service_type = (service_type or "").strip()
+    item.billing_cycle = billing_cycle or "monthly"
+    item.custom_days = int(custom_days or 30)
+    item.price = Decimal(str(price or "0"))
+    item.start_date = start_date or None
+    item.next_renewal_date = next_renewal_date
+    item.expiry_date = expiry_date or None
+    item.status = status or "active"
+    item.note = note or ""
+    item.save()
+    return True
+
+
+def delete_subscription(item_id: str) -> bool:
+    try:
+        SubscriptionService.objects.get(id=item_id).delete()
+        return True
+    except SubscriptionService.DoesNotExist:
+        return False
+
+
+def renew_subscription(item_id: str):
+    from datetime import timedelta
+
+    try:
+        item = SubscriptionService.objects.get(id=item_id)
+    except SubscriptionService.DoesNotExist:
+        return False
+    current = item.next_renewal_date
+    if item.billing_cycle == "monthly":
+        days = 30
+    elif item.billing_cycle == "quarterly":
+        days = 90
+    elif item.billing_cycle == "yearly":
+        days = 365
+    else:
+        days = max(1, int(item.custom_days or 30))
+    item.next_renewal_date = current + timedelta(days=days)
+    item.save(update_fields=["next_renewal_date", "updated_at"])
+    return True
+
+
+def subscription_summary() -> dict:
+    items = SubscriptionService.objects.filter(status="active")
+    return {
+        "count": items.count(),
+        "total_price": round(float(sum(float(x.price or 0) for x in items)), 2),
+    }
 
 
 def _item_to_dict(item):

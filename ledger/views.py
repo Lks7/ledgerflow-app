@@ -714,19 +714,55 @@ def financial_report(request):
     current_month = datetime.now().strftime("%Y-%m")
 
     raw_journals = list_journals(month)
+
+    # ── Tag statistics: count + amount ──
     tag_counts = {}
+    tag_amounts = {}  # tag -> {"income": float, "expense": float}
+    all_accounts = get_accounts()
+    account_name_map = {a.get("id"): a.get("name") for a in all_accounts}
+    account_type_map = {a.get("id"): a.get("type") for a in all_accounts}
+
     for j in raw_journals:
-        for t in j.get("tags") or []:
+        journal_tags = j.get("tags") or []
+        for t in journal_tags:
             tag_counts[t] = tag_counts.get(t, 0) + 1
 
+        # Compute per-journal income/expense, then attribute to tags
+        j_income = 0.0
+        j_expense = 0.0
+        for e in j.get("entries", []):
+            aid = e.get("account_id")
+            if not aid:
+                continue
+            debit = float(e.get("debit") or 0)
+            credit = float(e.get("credit") or 0)
+            t = account_type_map.get(aid)
+            if t == "expense" and debit > 0:
+                j_expense += debit
+            elif t == "income" and credit > 0:
+                j_income += credit
+
+        for t in journal_tags:
+            if t not in tag_amounts:
+                tag_amounts[t] = {"income": 0.0, "expense": 0.0}
+            tag_amounts[t]["income"] += j_income
+            tag_amounts[t]["expense"] += j_expense
+
     tags = sorted(
-        [{"tag": k, "count": v} for k, v in tag_counts.items()],
-        key=lambda x: x["count"],
+        [
+            {
+                "tag": k,
+                "count": v,
+                "income": round(tag_amounts.get(k, {}).get("income", 0), 2),
+                "expense": round(tag_amounts.get(k, {}).get("expense", 0), 2),
+            }
+            for k, v in tag_counts.items()
+        ],
+        key=lambda x: x["expense"],
         reverse=True,
     )
 
-    account_name_map = {a.get("id"): a.get("name") for a in get_accounts()}
-    account_type_map = {a.get("id"): a.get("type") for a in get_accounts()}
+    # ── Account statistics ──
     account_amount_map = {}
     for j in raw_journals:
         for e in j.get("entries", []):
@@ -748,6 +784,7 @@ def financial_report(request):
             {
                 "account_id": aid,
                 "name": account_name_map.get(aid, aid),
+                "type": account_type_map.get(aid, ""),
                 "amount": round(amount, 2),
             }
             for aid, amount in account_amount_map.items()
@@ -756,6 +793,11 @@ def financial_report(request):
         key=lambda x: abs(x["amount"]),
         reverse=True,
     )
+
+    # ── JSON data for charts ──
+    categories_json = json.dumps(monthly.get("categories", []), ensure_ascii=False)
+    tags_json = json.dumps(tags, ensure_ascii=False)
+    account_rank_json = json.dumps(account_rank, ensure_ascii=False)
 
     context = {
         "month": month,
@@ -768,6 +810,9 @@ def financial_report(request):
         "next_month": next_month,
         "current_month": current_month,
         "advice": advice,
+        "categories_json": categories_json,
+        "tags_json": tags_json,
+        "account_rank_json": account_rank_json,
     }
     return render(request, "ledger/financial_report.html", context)
 

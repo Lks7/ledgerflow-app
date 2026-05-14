@@ -1,0 +1,513 @@
+{% extends 'base.html' %}
+{% block title %}待办事项{% endblock %}
+{% block content %}
+<div id="todo-app-root">
+<div class="todo-page">
+
+  <!-- ═══ 页头 ═══ -->
+  <div class="todo-header">
+    <div>
+      <h2 class="page-title">📋 待办事项</h2>
+      <p class="page-desc">用四象限法则管理你的任务，分清轻重缓急。</p>
+    </div>
+    <button class="todo-btn-primary" onclick="openAddModal()" style="display:inline-flex; align-items:center; gap:6px;">
+      <span style="font-size:16px;">✨</span> 新增待办
+    </button>
+  </div>
+
+  <!-- ═══ 统计卡片 ═══ -->
+  <div class="todo-stats">
+    <div class="todo-stat-card">
+      <span class="todo-stat-icon">📌</span>
+      <div class="todo-stat-body">
+        <div class="todo-stat-num">{{ summary.pending }}</div>
+        <div class="todo-stat-label">进行中</div>
+      </div>
+    </div>
+    <div class="todo-stat-card todo-stat-today">
+      <span class="todo-stat-icon">📅</span>
+      <div class="todo-stat-body">
+        <div class="todo-stat-num">{{ summary.due_today }}</div>
+        <div class="todo-stat-label">今日到期</div>
+      </div>
+    </div>
+    <div class="todo-stat-card todo-stat-overdue">
+      <span class="todo-stat-icon">⏰</span>
+      <div class="todo-stat-body">
+        <div class="todo-stat-num">{{ summary.overdue }}</div>
+        <div class="todo-stat-label">已逾期</div>
+      </div>
+    </div>
+    <div class="todo-stat-card todo-stat-done">
+      <span class="todo-stat-icon">✅</span>
+      <div class="todo-stat-body">
+        <div class="todo-stat-num">{{ summary.done }}</div>
+        <div class="todo-stat-label">已完成</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 快速添加栏 ═══ -->
+  <form method="POST" action="{% url 'todo_create' %}" class="todo-quickadd">
+    {% csrf_token %}
+    <input type="hidden" name="quadrant" value="q1">
+    <input type="hidden" name="category" value="other">
+    <div class="todo-qa-row">
+      <input type="text" name="title" placeholder="快速添加待办…按回车提交" class="todo-qa-input" required autocomplete="off">
+      <select name="quadrant" class="todo-qa-select" onchange="this.form.querySelector('input[name=quadrant]').value=this.value">
+        <option value="q1">🔴 紧急重要</option>
+        <option value="q2">🟡 重要不紧急</option>
+        <option value="q3">🔵 紧急不重要</option>
+        <option value="q4">⚪ 不紧急不重要</option>
+      </select>
+      <button type="submit" class="todo-qa-btn">添加</button>
+    </div>
+  </form>
+
+  <!-- ═══ 视图切换 ═══ -->
+  <div class="todo-view-toggle">
+    <button class="todo-view-btn todo-view-active" id="btn-quadrant" onclick="switchView('quadrant')">
+      <span>⊞</span> 四象限
+    </button>
+    <button class="todo-view-btn" id="btn-list" onclick="switchView('list')">
+      <span>☰</span> 列表
+    </button>
+  </div>
+
+  <!-- ═══ 四象限视图 ═══ -->
+  <div id="view-quadrant" class="todo-quadrant-grid">
+    <!-- Q1: 紧急且重要 -->
+    <div class="todo-quad todo-quad-q1">
+      <div class="todo-quad-header">
+        <div class="todo-quad-title">
+          <span class="todo-quad-dot todo-dot-q1"></span>
+          <h3>紧急且重要</h3>
+          <span class="todo-quad-badge">{{ summary.q1 }}</span>
+        </div>
+        <span class="todo-quad-subtitle">DO FIRST · 立即执行</span>
+      </div>
+      <div class="todo-quad-body">
+        {% for item in q1_items %}
+        <div class="todo-card {% if item.is_overdue %}todo-card-overdue{% endif %} {% if item.is_due_today %}todo-card-today{% endif %}">
+          <div class="todo-card-main">
+            <form method="POST" action="{% url 'todo_toggle' %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-check" title="标记完成">○</button>
+            </form>
+            <div class="todo-card-content">
+              <span class="todo-card-title">{{ item.title }}</span>
+              <div class="todo-card-meta">
+                <span class="todo-cat-badge todo-cat-{{ item.category }}">{{ item.get_category_display }}</span>
+                {% if item.due_date %}<span class="todo-due {% if item.is_overdue %}todo-due-overdue{% elif item.is_due_today %}todo-due-today{% endif %}">📅 {{ item.due_date }}</span>{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="todo-card-actions">
+            <button class="todo-action-btn" onclick="openEditModal('{{ item.id }}','{{ item.title|escapejs }}','{{ item.quadrant }}','{{ item.category }}','{{ item.due_date|default_if_none:"" }}','{{ item.note|escapejs }}')" title="编辑">✏️</button>
+            <form method="POST" action="{% url 'todo_delete' %}" style="display:inline;" onsubmit="return confirm('确认删除？')">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-action-btn" title="删除">🗑️</button>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <div class="todo-quad-empty">🎯 暂无任务</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Q2: 重要不紧急 -->
+    <div class="todo-quad todo-quad-q2">
+      <div class="todo-quad-header">
+        <div class="todo-quad-title">
+          <span class="todo-quad-dot todo-dot-q2"></span>
+          <h3>重要不紧急</h3>
+          <span class="todo-quad-badge">{{ summary.q2 }}</span>
+        </div>
+        <span class="todo-quad-subtitle">SCHEDULE · 计划安排</span>
+      </div>
+      <div class="todo-quad-body">
+        {% for item in q2_items %}
+        <div class="todo-card {% if item.is_overdue %}todo-card-overdue{% endif %} {% if item.is_due_today %}todo-card-today{% endif %}">
+          <div class="todo-card-main">
+            <form method="POST" action="{% url 'todo_toggle' %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-check" title="标记完成">○</button>
+            </form>
+            <div class="todo-card-content">
+              <span class="todo-card-title">{{ item.title }}</span>
+              <div class="todo-card-meta">
+                <span class="todo-cat-badge todo-cat-{{ item.category }}">{{ item.get_category_display }}</span>
+                {% if item.due_date %}<span class="todo-due {% if item.is_overdue %}todo-due-overdue{% elif item.is_due_today %}todo-due-today{% endif %}">📅 {{ item.due_date }}</span>{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="todo-card-actions">
+            <button class="todo-action-btn" onclick="openEditModal('{{ item.id }}','{{ item.title|escapejs }}','{{ item.quadrant }}','{{ item.category }}','{{ item.due_date|default_if_none:"" }}','{{ item.note|escapejs }}')" title="编辑">✏️</button>
+            <form method="POST" action="{% url 'todo_delete' %}" style="display:inline;" onsubmit="return confirm('确认删除？')">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-action-btn" title="删除">🗑️</button>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <div class="todo-quad-empty">📐 暂无任务</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Q3: 紧急不重要 -->
+    <div class="todo-quad todo-quad-q3">
+      <div class="todo-quad-header">
+        <div class="todo-quad-title">
+          <span class="todo-quad-dot todo-dot-q3"></span>
+          <h3>紧急不重要</h3>
+          <span class="todo-quad-badge">{{ summary.q3 }}</span>
+        </div>
+        <span class="todo-quad-subtitle">DELEGATE · 委派他人</span>
+      </div>
+      <div class="todo-quad-body">
+        {% for item in q3_items %}
+        <div class="todo-card {% if item.is_overdue %}todo-card-overdue{% endif %} {% if item.is_due_today %}todo-card-today{% endif %}">
+          <div class="todo-card-main">
+            <form method="POST" action="{% url 'todo_toggle' %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-check" title="标记完成">○</button>
+            </form>
+            <div class="todo-card-content">
+              <span class="todo-card-title">{{ item.title }}</span>
+              <div class="todo-card-meta">
+                <span class="todo-cat-badge todo-cat-{{ item.category }}">{{ item.get_category_display }}</span>
+                {% if item.due_date %}<span class="todo-due {% if item.is_overdue %}todo-due-overdue{% elif item.is_due_today %}todo-due-today{% endif %}">📅 {{ item.due_date }}</span>{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="todo-card-actions">
+            <button class="todo-action-btn" onclick="openEditModal('{{ item.id }}','{{ item.title|escapejs }}','{{ item.quadrant }}','{{ item.category }}','{{ item.due_date|default_if_none:"" }}','{{ item.note|escapejs }}')" title="编辑">✏️</button>
+            <form method="POST" action="{% url 'todo_delete' %}" style="display:inline;" onsubmit="return confirm('确认删除？')">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-action-btn" title="删除">🗑️</button>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <div class="todo-quad-empty">📤 暂无任务</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Q4: 不紧急不重要 -->
+    <div class="todo-quad todo-quad-q4">
+      <div class="todo-quad-header">
+        <div class="todo-quad-title">
+          <span class="todo-quad-dot todo-dot-q4"></span>
+          <h3>不紧急不重要</h3>
+          <span class="todo-quad-badge">{{ summary.q4 }}</span>
+        </div>
+        <span class="todo-quad-subtitle">ELIMINATE · 考虑删除</span>
+      </div>
+      <div class="todo-quad-body">
+        {% for item in q4_items %}
+        <div class="todo-card {% if item.is_overdue %}todo-card-overdue{% endif %} {% if item.is_due_today %}todo-card-today{% endif %}">
+          <div class="todo-card-main">
+            <form method="POST" action="{% url 'todo_toggle' %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-check" title="标记完成">○</button>
+            </form>
+            <div class="todo-card-content">
+              <span class="todo-card-title">{{ item.title }}</span>
+              <div class="todo-card-meta">
+                <span class="todo-cat-badge todo-cat-{{ item.category }}">{{ item.get_category_display }}</span>
+                {% if item.due_date %}<span class="todo-due {% if item.is_overdue %}todo-due-overdue{% elif item.is_due_today %}todo-due-today{% endif %}">📅 {{ item.due_date }}</span>{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="todo-card-actions">
+            <button class="todo-action-btn" onclick="openEditModal('{{ item.id }}','{{ item.title|escapejs }}','{{ item.quadrant }}','{{ item.category }}','{{ item.due_date|default_if_none:"" }}','{{ item.note|escapejs }}')" title="编辑">✏️</button>
+            <form method="POST" action="{% url 'todo_delete' %}" style="display:inline;" onsubmit="return confirm('确认删除？')">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-action-btn" title="删除">🗑️</button>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <div class="todo-quad-empty">🧹 暂无任务</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 列表视图 ═══ -->
+  <div id="view-list" class="todo-list-view" style="display:none;">
+    <div class="form-card" style="margin-bottom: 0;">
+      <div class="form-card-header" style="margin-bottom: 16px;">
+        <span class="form-card-icon">📋</span>
+        <h3 class="form-card-title">全部待办</h3>
+        <span class="badge">{{ summary.total }} 项</span>
+      </div>
+
+      {% if all_items %}
+      <div class="todo-list-items">
+        {% for item in all_items %}
+        <div class="todo-list-row {% if item.status == 'done' %}todo-list-done{% endif %} {% if item.is_overdue %}todo-list-overdue{% endif %}">
+          <form method="POST" action="{% url 'todo_toggle' %}" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="item_id" value="{{ item.id }}">
+            <button type="submit" class="todo-check-list {% if item.status == 'done' %}todo-checked{% endif %}" title="切换状态">
+              {% if item.status == 'done' %}✓{% else %}○{% endif %}
+            </button>
+          </form>
+          <div class="todo-list-content">
+            <span class="todo-list-title {% if item.status == 'done' %}todo-title-done{% endif %}">{{ item.title }}</span>
+            <div class="todo-list-meta">
+              <span class="todo-quad-pill todo-pill-{{ item.quadrant }}">{{ item.get_quadrant_display }}</span>
+              <span class="todo-cat-badge todo-cat-{{ item.category }}">{{ item.get_category_display }}</span>
+              {% if item.due_date %}<span class="todo-due {% if item.is_overdue %}todo-due-overdue{% elif item.is_due_today %}todo-due-today{% endif %}">📅 {{ item.due_date }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="todo-list-actions">
+            <button class="todo-action-btn" onclick="openEditModal('{{ item.id }}','{{ item.title|escapejs }}','{{ item.quadrant }}','{{ item.category }}','{{ item.due_date|default_if_none:"" }}','{{ item.note|escapejs }}')" title="编辑">✏️</button>
+            <form method="POST" action="{% url 'todo_delete' %}" style="display:inline;" onsubmit="return confirm('确认删除？')">
+              {% csrf_token %}
+              <input type="hidden" name="item_id" value="{{ item.id }}">
+              <button type="submit" class="todo-action-btn" title="删除">🗑️</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="report-empty">暂无待办事项，点击右上角"新增待办"开始吧 🚀</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ═══ 已完成折叠区 (四象限视图下) ═══ -->
+  {% if done_items %}
+  <details class="todo-done-section" id="done-section">
+    <summary class="todo-done-summary">
+      <span>✅ 已完成 ({{ summary.done }})</span>
+      <span class="todo-done-arrow">▸</span>
+    </summary>
+    <div class="todo-done-list">
+      {% for item in done_items %}
+      <div class="todo-list-row todo-list-done">
+        <form method="POST" action="{% url 'todo_toggle' %}" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="item_id" value="{{ item.id }}">
+          <button type="submit" class="todo-check-list todo-checked" title="恢复">✓</button>
+        </form>
+        <div class="todo-list-content">
+          <span class="todo-list-title todo-title-done">{{ item.title }}</span>
+          <div class="todo-list-meta">
+            <span class="todo-cat-badge todo-cat-{{ item.category }}">{{ item.get_category_display }}</span>
+            {% if item.completed_at %}<span class="todo-due" style="color:#94a3b8;">完成于 {{ item.completed_at|date:"m-d H:i" }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="todo-list-actions">
+          <form method="POST" action="{% url 'todo_delete' %}" style="display:inline;" onsubmit="return confirm('确认删除？')">
+            {% csrf_token %}
+            <input type="hidden" name="item_id" value="{{ item.id }}">
+            <button type="submit" class="todo-action-btn" title="删除">🗑️</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</div>
+
+<!-- ═══ 新增/编辑 Modal ═══ -->
+<div class="todo-modal-overlay" id="todoModal" onclick="if(event.target===this)closeModal()">
+  <div class="todo-modal">
+    <div class="todo-modal-header">
+      <h3 id="modalTitle">新增待办</h3>
+      <button class="todo-modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <form method="POST" id="todoForm" action="{% url 'todo_create' %}">
+      {% csrf_token %}
+      <input type="hidden" name="item_id" id="form-item-id" value="">
+
+      <div class="todo-form-group">
+        <label class="todo-form-label">标题 <span style="color:#ef4444;">*</span></label>
+        <input type="text" name="title" id="form-title" class="todo-form-input" placeholder="输入待办事项…" required>
+      </div>
+
+      <div class="todo-form-row">
+        <div class="todo-form-group" style="flex:1;">
+          <label class="todo-form-label">四象限</label>
+          <select name="quadrant" id="form-quadrant" class="todo-form-input">
+            <option value="q1">🔴 紧急且重要</option>
+            <option value="q2">🟡 重要不紧急</option>
+            <option value="q3">🔵 紧急不重要</option>
+            <option value="q4">⚪ 不紧急不重要</option>
+          </select>
+        </div>
+        <div class="todo-form-group" style="flex:1;">
+          <label class="todo-form-label">分类</label>
+          <select name="category" id="form-category" class="todo-form-input">
+            {% for val, label in categories %}
+            <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="todo-form-group">
+        <label class="todo-form-label">截止日期</label>
+        <input type="date" name="due_date" id="form-due-date" class="todo-form-input">
+      </div>
+
+      <div class="todo-form-group">
+        <label class="todo-form-label">备注</label>
+        <textarea name="note" id="form-note" class="todo-form-input" rows="3" placeholder="可选备注…"></textarea>
+      </div>
+
+      <div class="todo-form-actions">
+        <button type="button" class="todo-btn-ghost" onclick="closeModal()">取消</button>
+        <button type="submit" class="todo-btn-primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+
+<script>
+  // ── 视图切换 ──
+  function switchView(view) {
+    var quadView = document.getElementById('view-quadrant');
+    var listView = document.getElementById('view-list');
+    var btnQuad = document.getElementById('btn-quadrant');
+    var btnList = document.getElementById('btn-list');
+    var doneSection = document.getElementById('done-section');
+
+    if (!quadView) return;
+
+    if (view === 'list') {
+      quadView.style.display = 'none';
+      listView.style.display = 'block';
+      if (doneSection) doneSection.style.display = 'none';
+      btnList.classList.add('todo-view-active');
+      btnQuad.classList.remove('todo-view-active');
+      localStorage.setItem('todo-view', 'list');
+    } else {
+      quadView.style.display = 'grid';
+      listView.style.display = 'none';
+      if (doneSection) doneSection.style.display = 'block';
+      btnQuad.classList.add('todo-view-active');
+      btnList.classList.remove('todo-view-active');
+      localStorage.setItem('todo-view', 'quadrant');
+    }
+  }
+
+  // Restore last view
+  function initView() {
+    var saved = localStorage.getItem('todo-view');
+    if (saved === 'list') switchView('list');
+  }
+  initView();
+
+  // ── Modal 操作 ──
+  function openAddModal() {
+    document.getElementById('modalTitle').textContent = '新增待办';
+    document.getElementById('todoForm').action = '{% url "todo_create" %}';
+    document.getElementById('form-item-id').value = '';
+    document.getElementById('form-title').value = '';
+    document.getElementById('form-quadrant').value = 'q1';
+    document.getElementById('form-category').value = 'other';
+    document.getElementById('form-due-date').value = '';
+    document.getElementById('form-note').value = '';
+    document.getElementById('todoModal').classList.add('todo-modal-visible');
+    setTimeout(function() { document.getElementById('form-title').focus(); }, 100);
+  }
+
+  function openEditModal(id, title, quadrant, category, dueDate, note) {
+    document.getElementById('modalTitle').textContent = '编辑待办';
+    document.getElementById('todoForm').action = '{% url "todo_update" %}';
+    document.getElementById('form-item-id').value = id;
+    document.getElementById('form-title').value = title;
+    document.getElementById('form-quadrant').value = quadrant;
+    document.getElementById('form-category').value = category;
+    document.getElementById('form-due-date').value = dueDate;
+    document.getElementById('form-note').value = note;
+    document.getElementById('todoModal').classList.add('todo-modal-visible');
+    setTimeout(function() { document.getElementById('form-title').focus(); }, 100);
+  }
+
+  function closeModal() {
+    var modal = document.getElementById('todoModal');
+    if (modal) modal.classList.remove('todo-modal-visible');
+  }
+
+  // ESC to close modal
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // ── 异步无刷新提交 (AJAX) ──
+  document.addEventListener('submit', async function(e) {
+    // 拦截 todo 页面内的所有表单提交
+    if (!e.target.closest('#todo-app-root')) return;
+    
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    
+    // 禁用提交按钮防止重复点击
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.style.opacity = '0.5';
+
+    try {
+      // 提交数据
+      const response = await fetch(form.action, {
+        method: form.method,
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+
+      if (!response.ok) {
+        alert('操作失败，请重试');
+        if (submitBtn) submitBtn.style.opacity = '1';
+        return;
+      }
+
+      // 静默重新获取当前页面 HTML 
+      const htmlResp = await fetch(location.href);
+      const htmlText = await htmlResp.text();
+      
+      // 解析新 HTML 并替换现有的 DOM
+      const parser = new DOMParser();
+      const newDoc = parser.parseFromString(htmlText, 'text/html');
+      const newContent = newDoc.querySelector('#todo-app-root');
+      
+      if (newContent) {
+        document.querySelector('#todo-app-root').innerHTML = newContent.innerHTML;
+        // 重新初始化视图状态
+        initView();
+        // 如果是快速添加，清空输入框并保持焦点
+        if (form.classList.contains('todo-quickadd')) {
+          const input = document.querySelector('.todo-qa-input');
+          if (input) {
+            input.value = '';
+            input.focus();
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert('网络异常，请重试');
+    } finally {
+      if (submitBtn) submitBtn.style.opacity = '1';
+    }
+  });
+</script>
+{% endblock %}

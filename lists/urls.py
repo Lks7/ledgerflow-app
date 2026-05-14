@@ -10,4 +10,9 @@ urlpatterns = [
     path("delete", views.shopping_delete, name="shopping_delete"),
     path("ai-analyze", views.ai_analyze, name="shopping_ai_analyze"),
     path("to-journal-draft", views.to_journal_draft, name="to_journal_draft"),
+    path("subscriptions", views.subscription_list, name="subscription_list"),
+    path("subscriptions/create", views.subscription_create, name="subscription_create"),
+    path("subscriptions/update", views.subscription_update, name="subscription_update"),
+    path("subscriptions/delete", views.subscription_delete, name="subscription_delete"),
+    path("subscriptions/renew", views.subscription_renew, name="subscription_renew"),
 ]

@@ -28,4 +28,5 @@ urlpatterns = [
     path("lists/", include("lists.urls")),
     path("analytics/", include("analytics.urls_api")),
     path("ai/", include("ai_advisor.urls")),
+    path("todos/", include("todos.urls")),
 ]

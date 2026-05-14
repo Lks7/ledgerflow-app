@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% block title %}订阅服务管理{% endblock %}
+{% block content %}
+<div class="report-page">
+  <div class="report-header">
+    <div>
+      <h2 class="page-title">🔁 订阅服务管理</h2>
+      <p class="page-desc">管理服务器、会员等订阅项目，支持月度/季度/年度/自定义续订。</p>
+    </div>
+  </div>
+
+  <div class="stat-cards" style="margin-bottom:16px;">
+    <div class="stat-card stat-income">
+      <div class="stat-icon">📦</div>
+      <div class="stat-body">
+        <div class="stat-label">订阅数量</div>
+        <div class="stat-value">{{ summary.count }}</div>
+      </div>
+    </div>
+    <div class="stat-card stat-expense">
+      <div class="stat-icon">💴</div>
+      <div class="stat-body">
+        <div class="stat-label">当前价格合计</div>
+        <div class="stat-value">¥{{ summary.total_price|floatformat:2 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card" style="margin-bottom:16px;">
+    <div class="form-card-header">
+      <span class="form-card-icon">➕</span>
+      <h3 class="form-card-title">新增订阅服务</h3>
+    </div>
+    <form method="post" action="/lists/subscriptions/create" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label-sm">服务名称</label>
+        <input name="name" class="form-input" placeholder="如：阿里云服务器 / Netflix" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">服务类型</label>
+        <input name="service_type" class="form-input" placeholder="服务器 / 会员 / 域名" />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">订阅周期</label>
+        <select name="billing_cycle" class="form-select">
+          <option value="monthly">月度</option>
+          <option value="quarterly">季度</option>
+          <option value="yearly">年度</option>
+          <option value="custom">自定义</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">自定义周期（天）</label>
+        <input name="custom_days" type="number" min="1" value="30" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">价格</label>
+        <input name="price" type="number" min="0" step="0.01" class="form-input" placeholder="0.00" />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">订阅开始时间</label>
+        <input name="start_date" type="date" value="{{ today }}" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">续订时间</label>
+        <input name="next_renewal_date" type="date" value="{{ today }}" class="form-input" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label-sm">订阅结束时间</label>
+        <input name="expiry_date" type="date" value="{{ today }}" class="form-input" />
+      </div>
+      <div class="form-group" style="grid-column: span 3;">
+        <label class="form-label-sm">备注</label>
+        <input name="note" class="form-input" placeholder="例如：香港节点 / 工作邮箱 / 看片" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;align-items:end;">
+        <button type="submit" class="btn-primary-lg">新增服务</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-header">
+      <span class="form-card-icon">📋</span>
+      <h3 class="form-card-title">全部订阅服务</h3>
+    </div>
+    <div class="acc-table-wrap">
+      <table class="acc-table">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>类型</th>
+            <th>周期</th>
+            <th>价格</th>
+            <th>订阅开始时间</th>
+            <th>续订时间</th>
+            <th>订阅结束时间</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>
+              <strong>{{ item.name }}</strong>
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ item.note|default:'-' }}</div>
+            </td>
+            <td>{{ item.service_type|default:'-' }}</td>
+            <td>
+              {% if item.billing_cycle == 'monthly' %}月度{% elif item.billing_cycle == 'quarterly' %}季度{% elif item.billing_cycle == 'yearly' %}年度{% else %}自定义 {{ item.custom_days }} 天{% endif %}
+            </td>
+            <td class="acc-num">¥{{ item.price|floatformat:2 }}</td>
+            <td>{{ item.start_date|default:'-' }}</td>
+            <td>{{ item.next_renewal_date }}</td>
+            <td>{{ item.expiry_date|default:'-' }}</td>
+            <td>{{ item.status }}</td>
+            <td>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <form method="post" action="/lists/subscriptions/renew" style="display:inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="item_id" value="{{ item.id }}" />
+                  <button type="submit" class="sl-action-btn btn-done">续订</button>
+                </form>
+                <button type="button" class="sl-action-btn btn-journal" onclick="openSubModal('{{ item.id }}')">编辑</button>
+                <form method="post" action="/lists/subscriptions/delete" style="display:inline;" onsubmit="return confirm('确认删除该订阅服务？')">
+                  {% csrf_token %}
+                  <input type="hidden" name="item_id" value="{{ item.id }}" />
+                  <button type="submit" class="sl-action-btn btn-delete">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+
+          <tr style="display:none;">
+            <td colspan="9" style="padding:0;border:0;">
+              <div id="sub-modal-{{ item.id }}" class="acc-modal-mask" style="display:none;" onclick="closeSubModal('{{ item.id }}', event)">
+                <div class="acc-modal-card" onclick="event.stopPropagation()">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                    <h3 style="margin:0;font-size:18px;">编辑订阅服务：{{ item.name }}</h3>
+                    <button type="button" class="sl-action-btn btn-undo" onclick="closeSubModal('{{ item.id }}')">关闭</button>
+                  </div>
+                  <form method="post" action="/lists/subscriptions/update" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="item_id" value="{{ item.id }}" />
+                    <div class="form-group"><label class="form-label-sm">服务名称</label><input name="name" value="{{ item.name }}" class="form-input" required /></div>
+                    <div class="form-group"><label class="form-label-sm">服务类型</label><input name="service_type" value="{{ item.service_type }}" class="form-input" /></div>
+                    <div class="form-group"><label class="form-label-sm">订阅周期</label><select name="billing_cycle" class="form-select">
+                      <option value="monthly" {% if item.billing_cycle == 'monthly' %}selected{% endif %}>月度</option>
+                      <option value="quarterly" {% if item.billing_cycle == 'quarterly' %}selected{% endif %}>季度</option>
+                      <option value="yearly" {% if item.billing_cycle == 'yearly' %}selected{% endif %}>年度</option>
+                      <option value="custom" {% if item.billing_cycle == 'custom' %}selected{% endif %}>自定义</option>
+                    </select></div>
+                    <div class="form-group"><label class="form-label-sm">自定义周期（天）</label><input name="custom_days" type="number" min="1" value="{{ item.custom_days }}" class="form-input" /></div>
+                    <div class="form-group"><label class="form-label-sm">价格</label><input name="price" type="number" min="0" step="0.01" value="{{ item.price|floatformat:2 }}" class="form-input" /></div>
+                    <div class="form-group"><label class="form-label-sm">订阅开始时间</label><input name="start_date" type="date" value="{{ item.start_date }}" class="form-input" /></div>
+                    <div class="form-group"><label class="form-label-sm">续订时间</label><input name="next_renewal_date" type="date" value="{{ item.next_renewal_date }}" class="form-input" required /></div>
+                    <div class="form-group"><label class="form-label-sm">订阅结束时间</label><input name="expiry_date" type="date" value="{{ item.expiry_date }}" class="form-input" /></div>
+                    <div class="form-group"><label class="form-label-sm">状态</label><select name="status" class="form-select">
+                      <option value="active" {% if item.status == 'active' %}selected{% endif %}>进行中</option>
+                      <option value="paused" {% if item.status == 'paused' %}selected{% endif %}>暂停</option>
+                      <option value="cancelled" {% if item.status == 'cancelled' %}selected{% endif %}>已取消</option>
+                    </select></div>
+                    <div class="form-group" style="grid-column: span 2;"><label class="form-label-sm">备注</label><input name="note" value="{{ item.note }}" class="form-input" /></div>
+                    <div style="grid-column: span 2;display:flex;justify-content:flex-end;">
+                      <button type="submit" class="btn-primary-lg">保存</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" style="text-align:center;color:#64748b;padding:28px;">暂无订阅服务，请先新增。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+  function openSubModal(id) {
+    var m = document.getElementById('sub-modal-' + id);
+    if (!m) return;
+    var holder = m.closest('tr');
+    if (holder) holder.style.display = 'table-row';
+    m.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSubModal(id, event) {
+    if (event && event.target !== event.currentTarget) return;
+    var m = document.getElementById('sub-modal-' + id);
+    if (!m) return;
+    m.style.display = 'none';
+    var holder = m.closest('tr');
+    if (holder) holder.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+</script>
+{% endblock %}
