@@ -11,6 +11,15 @@ from google import genai
 from .models import ShoppingItem, SubscriptionService
 
 
+def _date_str(val) -> str:
+    """将 date / datetime / str / None 统一转为 ISO 字符串。"""
+    if val is None:
+        return ""
+    if isinstance(val, str):
+        return val
+    return val.isoformat()
+
+
 def _subscription_to_dict(item: SubscriptionService) -> dict:
     return {
         "id": item.id,
@@ -19,15 +28,13 @@ def _subscription_to_dict(item: SubscriptionService) -> dict:
         "billing_cycle": item.billing_cycle,
         "custom_days": item.custom_days,
         "price": float(item.price or 0),
-        "start_date": item.start_date.isoformat() if item.start_date else "",
-        "next_renewal_date": item.next_renewal_date.isoformat()
-        if item.next_renewal_date
-        else "",
-        "expiry_date": item.expiry_date.isoformat() if item.expiry_date else "",
+        "start_date": _date_str(item.start_date),
+        "next_renewal_date": _date_str(item.next_renewal_date),
+        "expiry_date": _date_str(item.expiry_date),
         "status": item.status,
         "note": item.note,
-        "created_at": item.created_at.isoformat() if item.created_at else "",
-        "updated_at": item.updated_at.isoformat() if item.updated_at else "",
+        "created_at": _date_str(item.created_at),
+        "updated_at": _date_str(item.updated_at),
     }
 
 
@@ -57,10 +64,11 @@ def create_subscription(
         custom_days=int(custom_days or 30),
         price=Decimal(str(price or "0")),
         start_date=(start_date or None),
-        next_renewal_date=next_renewal_date,
+        next_renewal_date=(next_renewal_date or None),
         expiry_date=(expiry_date or None),
         note=note or "",
     )
+    item.refresh_from_db()
     return _subscription_to_dict(item)
 
 
@@ -92,6 +100,7 @@ def update_subscription(
     item.status = status or "active"
     item.note = note or ""
     item.save()
+    item.refresh_from_db()
     return True
 
 

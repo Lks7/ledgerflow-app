@@ -7,7 +7,6 @@
   <title>{% block title %}复式记账{% endblock %}</title>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
   {% block extra_head %}{% endblock %}
@@ -34,7 +33,7 @@
         <!-- 分析报告入口已合并到财务报表 -->
       </nav>
     </aside>
-    <main class="container">
+    <main class="{% block container_class %}container{% endblock %}">
       {% block content %}{% endblock %}
     </main>
   </div>

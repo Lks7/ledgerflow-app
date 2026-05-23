@@ -14,7 +14,8 @@ from django.shortcuts import redirect, render
 from ai_advisor.models import AIAdviceSnapshot, AIConfig
 from ai_advisor.services import generate_monthly_advice
 from analytics.services import monthly_summary, yearly_summary
-from lists.models import ShoppingItem
+from lists.models import ShoppingItem, SubscriptionService
+from todos.models import TodoItem
 
 from .models import (
     Account,
@@ -146,6 +147,55 @@ def journal_list(request):
         item["tags_str"] = ",".join(journal.get("tags") or [])
         journals.append(item)
 
+    # ── 日历视图：按日聚合统计 ──────────────────────────────
+    account_type_map = {a.get("id", ""): a.get("type", "") for a in accounts}
+    daily_stats: dict = {}
+    for j in journals:
+        ds = j.get("date", "")
+        if not ds:
+            continue
+        if ds not in daily_stats:
+            daily_stats[ds] = {"expense": 0.0, "income": 0.0, "count": 0, "ids": []}
+        daily_stats[ds]["count"] += 1
+        daily_stats[ds]["ids"].append(j.get("id", ""))
+        for entry in j.get("entries", []):
+            acc_type = account_type_map.get(entry.get("account_id", ""), "")
+            debit = entry.get("debit_amount", 0.0)
+            credit = entry.get("credit_amount", 0.0)
+            if acc_type == "expense" and debit > 0:
+                daily_stats[ds]["expense"] = round(daily_stats[ds]["expense"] + debit, 2)
+            if acc_type == "income" and credit > 0:
+                daily_stats[ds]["income"] = round(daily_stats[ds]["income"] + credit, 2)
+
+    # ── 日历视图：构建月格子 ──────────────────────────────
+    cal_month_str = month or current_month
+    try:
+        cal_y, cal_m = map(int, cal_month_str.split("-"))
+    except Exception:
+        _td = date.today()
+        cal_y, cal_m = _td.year, _td.month
+
+    first_wd, days_in_m = monthrange(cal_y, cal_m)
+    cal_weeks: list = []
+    week: list = [None] * first_wd
+    for d in range(1, days_in_m + 1):
+        ds = f"{cal_y:04d}-{cal_m:02d}-{d:02d}"
+        st = daily_stats.get(ds, {})
+        week.append({
+            "day": d, "date": ds,
+            "expense": st.get("expense", 0.0),
+            "income": st.get("income", 0.0),
+            "count": st.get("count", 0),
+            "ids": ",".join(st.get("ids", [])),
+        })
+        if len(week) == 7:
+            cal_weeks.append(week)
+            week = []
+    while len(week) < 7:
+        week.append(None)
+    if any(w is not None for w in week):
+        cal_weeks.append(week)
+
     context = {
         "month": month,
         "tag": tag,
@@ -158,8 +208,14 @@ def journal_list(request):
         "current_month": current_month,
         "prev_month": prev_month,
         "next_month": next_month,
+        "daily_stats_json": json.dumps(daily_stats),
+        "cal_weeks": cal_weeks,
+        "cal_year": cal_y,
+        "cal_mon": cal_m,
+        "today": date.today().isoformat(),
     }
     return render(request, "ledger/journal_list.html", context)
+
 
 
 def journal_new(request):
@@ -1263,6 +1319,38 @@ def data_export_json(request):
         for i in ShoppingItem.objects.all()
     ]
 
+    subscription_services = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "service_type": s.service_type,
+            "billing_cycle": s.billing_cycle,
+            "custom_days": s.custom_days,
+            "price": str(s.price),
+            "start_date": s.start_date.isoformat() if s.start_date else "",
+            "next_renewal_date": s.next_renewal_date.isoformat() if s.next_renewal_date else "",
+            "expiry_date": s.expiry_date.isoformat() if s.expiry_date else "",
+            "status": s.status,
+            "note": s.note,
+        }
+        for s in SubscriptionService.objects.all()
+    ]
+
+    todo_items = [
+        {
+            "id": t.id,
+            "title": t.title,
+            "quadrant": t.quadrant,
+            "category": t.category,
+            "due_date": t.due_date.isoformat() if t.due_date else "",
+            "status": t.status,
+            "note": t.note,
+            "sort_order": t.sort_order,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else "",
+        }
+        for t in TodoItem.objects.all()
+    ]
+
     ai_config = [
         {
             "provider": c.provider,
@@ -1297,13 +1385,15 @@ def data_export_json(request):
     ]
 
     payload = {
-        "version": "1.0",
+        "version": "1.1",
         "exported_at": datetime.now().isoformat(),
         "accounts": accounts,
         "categories": categories,
         "tags": tags,
         "journals": journals,
         "shopping_items": shopping_items,
+        "subscription_services": subscription_services,
+        "todo_items": todo_items,
         "ai_config": ai_config,
         "ai_snapshots": ai_snapshots,
         "journal_logs": journal_logs,
@@ -1356,6 +1446,8 @@ def data_import_json(request):
             Journal.objects.all().delete()
             JournalLog.objects.all().delete()
             ShoppingItem.objects.all().delete()
+            SubscriptionService.objects.all().delete()
+            TodoItem.objects.all().delete()
             AIAdviceSnapshot.objects.all().delete()
             AIConfig.objects.all().delete()
             Tag.objects.all().delete()
@@ -1435,6 +1527,34 @@ def data_import_json(request):
                     planned_date=i.get("planned_date", ""),
                     platform=i.get("platform", ""),
                     note=i.get("note", ""),
+                )
+
+            for s in payload.get("subscription_services", []):
+                SubscriptionService.objects.create(
+                    id=s.get("id", ""),
+                    name=s.get("name", ""),
+                    service_type=s.get("service_type", ""),
+                    billing_cycle=s.get("billing_cycle", "monthly"),
+                    custom_days=s.get("custom_days", 30),
+                    price=s.get("price", "0"),
+                    start_date=(s.get("start_date") or None),
+                    next_renewal_date=(s.get("next_renewal_date") or None),
+                    expiry_date=(s.get("expiry_date") or None),
+                    status=s.get("status", "active"),
+                    note=s.get("note", ""),
+                )
+
+            for t in payload.get("todo_items", []):
+                TodoItem.objects.create(
+                    id=t.get("id", ""),
+                    title=t.get("title", ""),
+                    quadrant=t.get("quadrant", "q1"),
+                    category=t.get("category", "other"),
+                    due_date=(t.get("due_date") or None),
+                    status=t.get("status", "pending"),
+                    note=t.get("note", ""),
+                    sort_order=t.get("sort_order", 0),
+                    completed_at=(t.get("completed_at") or None),
                 )
 
             for c in payload.get("ai_config", []):

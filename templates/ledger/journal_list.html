@@ -2,12 +2,69 @@
 {% block title %}交易明细{% endblock %}
 {% block content %}
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/air-datepicker@3/air-datepicker.min.css">
 <style>
-  .flatpickr-calendar {
-    z-index: 3000 !important;
-  }
+  .air-datepicker-global-container { z-index: 3000 !important; }
+  .air-datepicker { font-family: inherit; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+  .air-datepicker--pointer { display: none; }
+  /* ── 视图切换 ── */
+  .view-tab { padding: 7px 18px; border-radius: 8px; border: 1.5px solid #d8e4db; background: #fff;
+    font-size: 13px; font-weight: 600; cursor: pointer; color: var(--muted); transition: all .15s; }
+  .view-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+  /* ── 日历格子 ── */
+  .cal-hdr { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; }
+  .cal-hdr-cell { text-align:center; font-size:11px; font-weight:700; color:#94a3b8;
+    text-transform:uppercase; padding:6px 0; letter-spacing:.5px; }
+  .cal-hdr-cell:nth-child(6),.cal-hdr-cell:nth-child(7){ color:#f87171; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-cell { min-height:76px; border-radius:10px; padding:8px 9px; cursor:pointer;
+    border:1.5px solid #eef4f0; background:#fafdfb; transition:all .15s;
+    display:flex; flex-direction:column; position:relative; }
+  .cal-cell:hover { border-color:var(--brand); background:#f0fdf4;
+    transform:translateY(-1px); box-shadow:0 4px 12px rgba(46,125,79,.1); }
+  .cal-cell.no-data { cursor:default; background:#f8fafb; border-color:#f1f5f3; }
+  .cal-cell.no-data:hover { transform:none; box-shadow:none; border-color:#f1f5f3; background:#f8fafb; }
+  .cal-cell.is-today { border-color:#3b82f6 !important; background:#eff6ff; }
+  .cal-cell.selected { border-color:var(--brand) !important; background:#ecfdf5;
+    box-shadow:0 0 0 3px rgba(46,125,79,.15); }
+  .cal-cell.lv1 { background:#f0fdf4; border-color:#bbf7d0; }
+  .cal-cell.lv2 { background:#fefce8; border-color:#fde68a; }
+  .cal-cell.lv3 { background:#fff7ed; border-color:#fed7aa; }
+  .cal-cell.lv4 { background:#fef2f2; border-color:#fecaca; }
+  .cal-day-n { font-size:13px; font-weight:700; color:var(--ink); line-height:1; }
+  .cal-exp { font-size:12px; font-weight:700; color:#dc2626; margin-top:5px;
+    font-family:ui-monospace,monospace; }
+  .cal-inc { font-size:11px; font-weight:600; color:#16a34a; font-family:ui-monospace,monospace; }
+  .cal-badge { position:absolute; top:5px; right:7px; background:#e2e8f0; color:#475569;
+    font-size:10px; font-weight:700; padding:1px 5px; border-radius:8px; }
+  .cal-empty { min-height:88px; }
+  .cal-day-detail-hd { font-size:14px; font-weight:700; color:var(--ink); padding:14px 0 8px;
+    border-top:1px solid var(--line); margin-top:16px; display:flex; align-items:center; gap:8px; }
+  /* ── 日历单元格展开模式 ── */
+  #cal-section.fullscreen { margin-bottom:0; display:flex; flex-direction:column; height:calc(100vh - 230px); }
+  #cal-section.fullscreen .cal-grid { flex:1; grid-auto-rows: 1fr; }
+  #cal-section.fullscreen .cal-cell { min-height:0; }
+  #cal-section.fullscreen .cal-empty { min-height:0; }
+  /* ── 右侧抽屉 ── */
+  #day-drawer-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.3);
+    z-index:1999; opacity:0; pointer-events:none; transition:opacity .25s; }
+  #day-drawer-backdrop.open { opacity:1; pointer-events:auto; }
+  #day-drawer { position:fixed; top:0; right:-520px; width:500px; max-width:92vw;
+    height:100vh; background:#fff; z-index:2000;
+    box-shadow:-6px 0 40px rgba(0,0,0,.14);
+    transition:right .3s cubic-bezier(.4,0,.2,1);
+    display:flex; flex-direction:column; }
+  #day-drawer.open { right:0; }
+  #drawer-hd { padding:20px 24px 16px; border-bottom:1px solid #e5e7eb;
+    display:flex; align-items:center; gap:12px; flex-shrink:0; }
+  #drawer-hd-title { flex:1; font-size:16px; font-weight:800; color:var(--ink); }
+  #drawer-close { width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb;
+    background:#f8fafc; cursor:pointer; font-size:16px; display:flex;
+    align-items:center; justify-content:center; color:#64748b; transition:all .15s; }
+  #drawer-close:hover { background:#fee2e2; border-color:#fecaca; color:#dc2626; }
+  #drawer-body { flex:1; overflow-y:auto; padding:16px 20px;
+    display:flex; flex-direction:column; gap:16px; }
+  #drawer-empty { text-align:center; padding:48px 0; color:var(--muted); font-size:14px; }
 </style>
 
 <div class="page-header" style="margin-bottom: 24px; animation: fadeInUp 0.35s ease-out;">
@@ -63,10 +120,49 @@
   </form>
 </div>
 
-<div class="journal-list" style="display: flex; flex-direction: column; gap: 20px;">
+<!-- ── 视图切换 ── -->
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+  <div style="display:flex;gap:8px;">
+    <button class="view-tab active" id="btn-list" onclick="switchView('list')">📋 列表视图</button>
+    <button class="view-tab" id="btn-cal" onclick="switchView('calendar')">📅 日历视图</button>
+  </div>
+  <div id="month-summary" style="font-size:13px;color:var(--muted);display:none;gap:16px;">
+    <span>支出 <strong id="sum-exp" style="color:#dc2626;"></strong></span>
+    <span>收入 <strong id="sum-inc" style="color:#16a34a;"></strong></span>
+    <span>共 <strong id="sum-cnt"></strong> 笔</span>
+  </div>
+</div>
+
+<!-- ── 日历区块 ── -->
+<div id="cal-section" class="form-card" style="display:none;margin-bottom:20px;">
+  <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:14px;">{{ cal_year }} 年 {{ cal_mon }} 月</div>
+  <div class="cal-hdr">
+    {% for d in "一二三四五六日" %}<div class="cal-hdr-cell">{{ d }}</div>{% endfor %}
+  </div>
+  <div class="cal-grid" id="cal-grid">
+    {% for week in cal_weeks %}{% for cell in week %}
+      {% if cell %}
+      <div class="cal-cell no-data{% if cell.date == today %} is-today{% endif %}"
+           data-date="{{ cell.date }}" data-ids="{{ cell.ids }}"
+           data-exp="{{ cell.expense }}" data-inc="{{ cell.income }}" data-cnt="{{ cell.count }}"
+           onclick="selectDay(this)">
+        <span class="cal-day-n">{{ cell.day }}</span>
+        {% if cell.count > 0 %}
+          <span class="cal-exp">¥{{ cell.expense|floatformat:0 }}</span>
+          {% if cell.income > 0 %}<span class="cal-inc">+¥{{ cell.income|floatformat:0 }}</span>{% endif %}
+          <span class="cal-badge">{{ cell.count }}笔</span>
+        {% endif %}
+      </div>
+      {% else %}<div class="cal-empty"></div>{% endif %}
+    {% endfor %}{% endfor %}
+  </div>
+
+</div>
+
+<div class="journal-list" id="list-view" style="display: none; flex-direction: column; gap: 20px;">
   {% for j in journals %}
-  <article class="form-card journal-card"
-    style="padding: 0; overflow: hidden; margin-bottom:0; animation: fadeInUp 0.5s ease-out;">
+  <article class="form-card journal-card" data-date="{{ j.date }}" data-jid="{{ j.id }}"
+    style="padding: 0; overflow: hidden; margin-bottom:0;">
     <!-- 卡片头部 -->
     <div
       style="background: linear-gradient(135deg, #fbfffb, #f3faf5); border-bottom: 1px solid var(--line); padding: 18px 24px; position: relative;">
@@ -236,32 +332,178 @@
   {% endfor %}
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/air-datepicker@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/air-datepicker@3/locale/zh.js"></script>
 <script>
   (function () {
     var el = document.getElementById('monthPicker');
     if (!el) return;
 
-    if (window.flatpickr && window.monthSelectPlugin) {
-      window.flatpickr(el, {
-        locale: window.flatpickr.l10ns.zh,
-        allowInput: true,
-        dateFormat: 'Y-m',
-        plugins: [
-          new window.monthSelectPlugin({
-            shorthand: true,
-            dateFormat: 'Y-m',
-            altFormat: 'Y年m月'
-          })
-        ]
-      });
+    if (typeof AirDatepicker === 'undefined') {
+      // 降级为浏览器原生 month 输入
+      el.type = 'month';
       return;
     }
 
-    // Final fallback: native month picker.
-    el.type = 'month';
+    var currentVal = el.value; // e.g. '2026-05'
+    var initDate = null;
+    if (currentVal && /^\d{4}-\d{2}$/.test(currentVal)) {
+      initDate = new Date(currentVal + '-01');
+    }
+
+    var dp = new AirDatepicker(el, {
+      locale: AirDatepickerLocaleZh,
+      view: 'months',        // 默认打开月份视图
+      minView: 'months',     // 最小粒度到月，不展开到日
+      dateFormat: function (date) {
+        // 格式化为 YYYY-MM 写回 input value
+        var y = date.getFullYear();
+        var m = String(date.getMonth() + 1).padStart(2, '0');
+        return y + '-' + m;
+      },
+      onSelect: function (opts) {
+        // 选完月份后自动提交表单
+        if (opts.date) {
+          el.closest('form').submit();
+        }
+      },
+      selectedDates: initDate ? [initDate] : [],
+      autoClose: true,
+      position: 'bottom left',
+    });
   })();
 </script>
+
+
+<script>
+  var DAILY = JSON.parse('{{ daily_stats_json|escapejs }}');
+  var curView = localStorage.getItem('jl-view') || 'list';
+  var curDay = null;
+
+  // ── 初始化
+  switchView(curView);
+
+  function switchView(v) {
+    curView = v;
+    localStorage.setItem('jl-view', v);
+    var isCal = v === 'calendar';
+    var calSection = document.getElementById('cal-section');
+    var listView = document.getElementById('list-view');
+    calSection.style.display = isCal ? '' : 'none';
+    // 日历模式：展开模式 + 完全隐藏列表
+    if (isCal) {
+      calSection.classList.add('fullscreen');
+      listView.style.display = 'none';
+      var container = document.querySelector('main.container');
+      if (container) {
+        container.style.maxWidth = '100%';
+        container.style.margin = '0';
+        container.style.padding = '16px 24px';
+      }
+      colorCells();
+      updateSummary();
+      closeDrawer();
+    } else {
+      calSection.classList.remove('fullscreen');
+      listView.style.display = 'flex';
+      var container = document.querySelector('main.container');
+      if (container) {
+        container.style.maxWidth = '';
+        container.style.margin = '';
+        container.style.padding = '';
+      }
+      closeDrawer();
+      showAll();
+    }
+    document.getElementById('btn-cal').classList.toggle('active', isCal);
+    document.getElementById('btn-list').classList.toggle('active', !isCal);
+    document.getElementById('month-summary').style.display = isCal ? 'flex' : 'none';
+  }
+
+  function colorCells() {
+    var exps = Object.values(DAILY).map(function(d){ return d.expense || 0; });
+    var max = exps.length ? Math.max.apply(null, exps) : 1;
+    document.querySelectorAll('#cal-grid .cal-cell').forEach(function(el) {
+      var exp = parseFloat(el.dataset.exp || 0);
+      el.classList.remove('lv1','lv2','lv3','lv4','no-data');
+      if (exp <= 0) { el.classList.add('no-data'); return; }
+      var r = exp / (max || 1);
+      if (r < 0.25) el.classList.add('lv1');
+      else if (r < 0.5) el.classList.add('lv2');
+      else if (r < 0.75) el.classList.add('lv3');
+      else el.classList.add('lv4');
+    });
+  }
+
+  function updateSummary() {
+    var totExp = 0, totInc = 0, totCnt = 0;
+    Object.values(DAILY).forEach(function(d){ totExp += d.expense||0; totInc += d.income||0; totCnt += d.count||0; });
+    document.getElementById('sum-exp').textContent = '¥' + totExp.toFixed(0);
+    document.getElementById('sum-inc').textContent = '¥' + totInc.toFixed(0);
+    document.getElementById('sum-cnt').textContent = totCnt;
+  }
+
+  function selectDay(el) {
+    if (!el.dataset.cnt || el.dataset.cnt === '0') return;
+    document.querySelectorAll('#cal-grid .cal-cell').forEach(function(c){ c.classList.remove('selected'); });
+    el.classList.add('selected');
+    curDay = el.dataset.date;
+
+    // 填充抽屉标题
+    var exp = parseFloat(el.dataset.exp || 0);
+    var inc = parseFloat(el.dataset.inc || 0);
+    var cnt = el.dataset.cnt || 0;
+    var title = curDay + '　支出 <span style="color:#dc2626;font-weight:800;">¥' + exp.toFixed(2) + '</span>';
+    if (inc > 0) title += '　收入 <span style="color:#16a34a;font-weight:800;">¥' + inc.toFixed(2) + '</span>';
+    title += '　<span style="color:var(--muted);font-size:13px;font-weight:600;">' + cnt + '笔</span>';
+    document.getElementById('drawer-hd-title').innerHTML = title;
+
+    // 安全克隆匹配日期的卡片
+    var body = document.getElementById('drawer-body');
+    body.innerHTML = '';
+    var articles = document.querySelectorAll('#list-view article[data-date="' + curDay + '"]');
+    if (articles.length === 0) {
+      var emp = document.createElement('div');
+      emp.id = 'drawer-empty';
+      emp.textContent = '本日暂无记账明细';
+      body.appendChild(emp);
+    } else {
+      articles.forEach(function(a) {
+        var clone = a.cloneNode(true);
+        clone.style.animation = 'none';
+        body.appendChild(clone);
+      });
+    }
+
+    // 打开抽屉
+    document.getElementById('day-drawer').classList.add('open');
+    document.getElementById('day-drawer-backdrop').classList.add('open');
+  }
+
+  function closeDrawer() {
+    document.getElementById('day-drawer').classList.remove('open');
+    document.getElementById('day-drawer-backdrop').classList.remove('open');
+    document.querySelectorAll('#cal-grid .cal-cell').forEach(function(c){ c.classList.remove('selected'); });
+    curDay = null;
+  }
+
+  function showAll() {
+    document.querySelectorAll('#list-view article[data-date]').forEach(function(a){ a.style.display = ''; });
+  }
+</script>
+<!-- ── 抽屉背景 ── -->
+<div id="day-drawer-backdrop" onclick="closeDrawer()"></div>
+
+<!-- ── 日期详情抽屉 ── -->
+<div id="day-drawer">
+  <div id="drawer-hd">
+    <span style="font-size:22px;">📋</span>
+    <div id="drawer-hd-title">—</div>
+    <button id="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div id="drawer-body">
+    <div id="drawer-empty" style="display:none;">本日暂无记账明细</div>
+  </div>
+</div>
+
 {% endblock %}

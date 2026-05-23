@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import Count
 
 from .models import (
     Account,
@@ -172,20 +173,22 @@ def category_used_count(category_id: str) -> int:
 
 
 def list_categories_with_usage() -> list:
-    items = []
-    for c in Category.objects.all():
-        items.append(
-            {
-                "id": c.id,
-                "name": c.name,
-                "icon": c.icon,
-                "group": c.group,
-                "parent_id": c.parent_id or "",
-                "budget_monthly": str(c.budget_monthly),
-                "usage_count": category_used_count(c.id),
-            }
-        )
-    return items
+    """一次性查询所有分类及其使用数，避免 N+1 问题。"""
+    qs = Category.objects.annotate(
+        usage_count=Count("entries", distinct=True)
+    ).order_by("group", "name")
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "icon": c.icon,
+            "group": c.group,
+            "parent_id": c.parent_id or "",
+            "budget_monthly": str(c.budget_monthly),
+            "usage_count": c.usage_count,
+        }
+        for c in qs
+    ]
 
 
 def build_category_tree(flat_list: list) -> list:
