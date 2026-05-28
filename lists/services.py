@@ -1,7 +1,7 @@
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -20,7 +20,52 @@ def _date_str(val) -> str:
     return val.isoformat()
 
 
+def _subscription_progress(item: SubscriptionService) -> dict:
+    """计算订阅到期进度信息（供模板渲染进度条）。"""
+    today = date.today()
+    renewal = item.next_renewal_date  # date 对象
+    if not renewal:
+        return {"progress_pct": 0, "days_left": 0, "progress_color": "red", "cycle_days": 0}
+
+    # 推算周期天数
+    if item.billing_cycle == "monthly":
+        cycle_days = 30
+    elif item.billing_cycle == "quarterly":
+        cycle_days = 90
+    elif item.billing_cycle == "yearly":
+        cycle_days = 365
+    else:
+        cycle_days = max(1, int(item.custom_days or 30))
+
+    # 起点：优先用 start_date，否则从 next_renewal_date 反推
+    if item.start_date:
+        start = item.start_date
+    else:
+        start = renewal - timedelta(days=cycle_days)
+
+    days_left = (renewal - today).days
+    total_days = (renewal - start).days or 1
+    elapsed_days = (today - start).days
+    # 限制在 0~100 之间
+    progress_pct = max(0, min(100, int(elapsed_days / total_days * 100)))
+
+    if days_left >= 14:
+        color = "green"
+    elif days_left >= 7:
+        color = "yellow"
+    else:
+        color = "red"
+
+    return {
+        "progress_pct": progress_pct,
+        "days_left": max(0, days_left),
+        "progress_color": color,
+        "cycle_days": cycle_days,
+    }
+
+
 def _subscription_to_dict(item: SubscriptionService) -> dict:
+    progress = _subscription_progress(item)
     return {
         "id": item.id,
         "name": item.name,
@@ -35,6 +80,11 @@ def _subscription_to_dict(item: SubscriptionService) -> dict:
         "note": item.note,
         "created_at": _date_str(item.created_at),
         "updated_at": _date_str(item.updated_at),
+        # 进度条数据
+        "progress_pct": progress["progress_pct"],
+        "days_left": progress["days_left"],
+        "progress_color": progress["progress_color"],
+        "cycle_days": progress["cycle_days"],
     }
 
 

@@ -1,6 +1,58 @@
 {% extends 'base.html' %}
 {% block title %}订阅服务管理{% endblock %}
 {% block content %}
+<style>
+  /* ===== 订阅到期进度条 ===== */
+  .sub-progress-wrap {
+    margin-top: 6px;
+  }
+  .sub-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #94a3b8;
+    margin-bottom: 3px;
+    white-space: nowrap;
+  }
+  .sub-days-left {
+    font-weight: 600;
+    font-size: 11.5px;
+    padding: 1px 6px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .sub-days-left.green  { background: rgba(34,197,94,.15);  color: #16a34a; }
+  .sub-days-left.yellow { background: rgba(234,179,8,.15);  color: #b45309; }
+  .sub-days-left.red    { background: rgba(239,68,68,.15);  color: #dc2626; }
+  .sub-progress-bar {
+    width: 100%;
+    height: 5px;
+    border-radius: 9999px;
+    background: rgba(148,163,184,.18);
+    overflow: hidden;
+    min-width: 80px;
+  }
+  .sub-progress-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width .6s cubic-bezier(.4,0,.2,1);
+    animation: subFillIn .7s ease both;
+  }
+  @keyframes subFillIn {
+    from { width: 0 !important; }
+  }
+  .sub-progress-fill.green  { background: linear-gradient(90deg,#4ade80,#22c55e); }
+  .sub-progress-fill.yellow { background: linear-gradient(90deg,#fde047,#f59e0b); }
+  .sub-progress-fill.red    { background: linear-gradient(90deg,#f87171,#ef4444); }
+  /* 过期标签 */
+  .sub-expired-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: rgba(239,68,68,.12); color: #dc2626;
+    font-size: 11px; font-weight: 600; padding: 2px 7px;
+    border-radius: 20px; margin-top: 4px;
+  }
+</style>
 <div class="report-page">
   <div class="report-header">
     <div>
@@ -31,7 +83,7 @@
       <span class="form-card-icon">➕</span>
       <h3 class="form-card-title">新增订阅服务</h3>
     </div>
-    <form method="post" action="/lists/subscriptions/create" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;">
+    <form method="post" action="/lists/subscriptions/create/" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;">
       {% csrf_token %}
       <div class="form-group">
         <label class="form-label-sm">服务名称</label>
@@ -113,18 +165,36 @@
             </td>
             <td class="acc-num">¥{{ item.price|floatformat:2 }}</td>
             <td>{{ item.start_date|default:'-' }}</td>
-            <td>{{ item.next_renewal_date }}</td>
+            <td>
+              <div>{{ item.next_renewal_date }}</div>
+              {% if item.status == 'active' %}
+              <div class="sub-progress-wrap">
+                <div class="sub-progress-meta">
+                  <span>已用 {{ item.progress_pct }}%</span>
+                  {% if item.days_left == 0 %}
+                    <span class="sub-days-left red">⚠ 已到期</span>
+                  {% else %}
+                    <span class="sub-days-left {{ item.progress_color }}">剩 {{ item.days_left }} 天</span>
+                  {% endif %}
+                </div>
+                <div class="sub-progress-bar">
+                  <div class="sub-progress-fill {{ item.progress_color }}"
+                       style="width:{{ item.progress_pct }}%"></div>
+                </div>
+              </div>
+              {% endif %}
+            </td>
             <td>{{ item.expiry_date|default:'-' }}</td>
             <td>{{ item.status }}</td>
             <td>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <form method="post" action="/lists/subscriptions/renew" style="display:inline;">
+                <form method="post" action="/lists/subscriptions/renew/" style="display:inline;">
                   {% csrf_token %}
                   <input type="hidden" name="item_id" value="{{ item.id }}" />
                   <button type="submit" class="sl-action-btn btn-done">续订</button>
                 </form>
                 <button type="button" class="sl-action-btn btn-journal" onclick="openSubModal('{{ item.id }}')">编辑</button>
-                <form method="post" action="/lists/subscriptions/delete" style="display:inline;" onsubmit="return confirm('确认删除该订阅服务？')">
+                <form method="post" action="/lists/subscriptions/delete/" style="display:inline;" onsubmit="return confirm('确认删除该订阅服务？')">
                   {% csrf_token %}
                   <input type="hidden" name="item_id" value="{{ item.id }}" />
                   <button type="submit" class="sl-action-btn btn-delete">删除</button>
@@ -141,7 +211,7 @@
                     <h3 style="margin:0;font-size:18px;">编辑订阅服务：{{ item.name }}</h3>
                     <button type="button" class="sl-action-btn btn-undo" onclick="closeSubModal('{{ item.id }}')">关闭</button>
                   </div>
-                  <form method="post" action="/lists/subscriptions/update" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+                  <form method="post" action="/lists/subscriptions/update/" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
                     {% csrf_token %}
                     <input type="hidden" name="item_id" value="{{ item.id }}" />
                     <div class="form-group"><label class="form-label-sm">服务名称</label><input name="name" value="{{ item.name }}" class="form-input" required /></div>
