@@ -52,7 +52,111 @@
     font-size: 11px; font-weight: 600; padding: 2px 7px;
     border-radius: 20px; margin-top: 4px;
   }
+
+  /* ===== 编辑弹窗 ===== */
+  .sub-edit-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .sub-edit-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sub-edit-card {
+    width: min(640px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.25);
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.2s ease;
+  }
+  .sub-edit-overlay.visible .sub-edit-card {
+    transform: scale(1) translateY(0);
+  }
+  .sub-edit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    position: sticky;
+    top: 0;
+    background: #ffffff;
+    border-radius: 16px 16px 0 0;
+    z-index: 1;
+  }
+  .sub-edit-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+  .sub-edit-close {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    color: #64748b;
+    transition: all 0.15s;
+  }
+  .sub-edit-close:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+  }
+  .sub-edit-body {
+    padding: 20px 24px 24px;
+  }
+  .sub-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .sub-edit-grid .span2 {
+    grid-column: span 2;
+  }
+  .sub-edit-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .sub-edit-btn-cancel {
+    padding: 8px 18px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sub-edit-btn-cancel:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
 </style>
+
 <div class="report-page">
   <div class="report-header">
     <div>
@@ -115,12 +219,12 @@
         <input name="start_date" type="date" value="{{ today }}" class="form-input" />
       </div>
       <div class="form-group">
-        <label class="form-label-sm">续订时间</label>
+        <label class="form-label-sm">续订时间 <span style="font-size:11px;color:#94a3b8;">（下次扣款日）</span></label>
         <input name="next_renewal_date" type="date" value="{{ today }}" class="form-input" required />
       </div>
       <div class="form-group">
-        <label class="form-label-sm">订阅结束时间</label>
-        <input name="expiry_date" type="date" value="{{ today }}" class="form-input" />
+        <label class="form-label-sm">订阅结束时间 <span style="font-size:11px;color:#94a3b8;">（服务到期日，可选）</span></label>
+        <input name="expiry_date" type="date" class="form-input" />
       </div>
       <div class="form-group" style="grid-column: span 3;">
         <label class="form-label-sm">备注</label>
@@ -146,8 +250,8 @@
             <th>周期</th>
             <th>价格</th>
             <th>订阅开始时间</th>
-            <th>续订时间</th>
-            <th>订阅结束时间</th>
+            <th>续订时间 <span style="font-weight:400;color:#b0bec5;font-size:11px;">下次扣款</span></th>
+            <th>结束时间 <span style="font-weight:400;color:#b0bec5;font-size:11px;">服务到期</span></th>
             <th>状态</th>
             <th>操作</th>
           </tr>
@@ -193,51 +297,25 @@
                   <input type="hidden" name="item_id" value="{{ item.id }}" />
                   <button type="submit" class="sl-action-btn btn-done">续订</button>
                 </form>
-                <button type="button" class="sl-action-btn btn-journal" onclick="openSubModal('{{ item.id }}')">编辑</button>
+                <button type="button" class="sl-action-btn btn-journal"
+                  onclick="openSubEdit({
+                    id: '{{ item.id }}',
+                    name: '{{ item.name|escapejs }}',
+                    service_type: '{{ item.service_type|escapejs }}',
+                    billing_cycle: '{{ item.billing_cycle }}',
+                    custom_days: '{{ item.custom_days }}',
+                    price: '{{ item.price|floatformat:2 }}',
+                    start_date: '{{ item.start_date }}',
+                    next_renewal_date: '{{ item.next_renewal_date }}',
+                    expiry_date: '{{ item.expiry_date }}',
+                    status: '{{ item.status }}',
+                    note: '{{ item.note|escapejs }}'
+                  })">编辑</button>
                 <form method="post" action="/lists/subscriptions/delete/" style="display:inline;" onsubmit="return confirm('确认删除该订阅服务？')">
                   {% csrf_token %}
                   <input type="hidden" name="item_id" value="{{ item.id }}" />
                   <button type="submit" class="sl-action-btn btn-delete">删除</button>
                 </form>
-              </div>
-            </td>
-          </tr>
-
-          <tr style="display:none;">
-            <td colspan="9" style="padding:0;border:0;">
-              <div id="sub-modal-{{ item.id }}" class="acc-modal-mask" style="display:none;" onclick="closeSubModal('{{ item.id }}', event)">
-                <div class="acc-modal-card" onclick="event.stopPropagation()">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                    <h3 style="margin:0;font-size:18px;">编辑订阅服务：{{ item.name }}</h3>
-                    <button type="button" class="sl-action-btn btn-undo" onclick="closeSubModal('{{ item.id }}')">关闭</button>
-                  </div>
-                  <form method="post" action="/lists/subscriptions/update/" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-                    {% csrf_token %}
-                    <input type="hidden" name="item_id" value="{{ item.id }}" />
-                    <div class="form-group"><label class="form-label-sm">服务名称</label><input name="name" value="{{ item.name }}" class="form-input" required /></div>
-                    <div class="form-group"><label class="form-label-sm">服务类型</label><input name="service_type" value="{{ item.service_type }}" class="form-input" /></div>
-                    <div class="form-group"><label class="form-label-sm">订阅周期</label><select name="billing_cycle" class="form-select">
-                      <option value="monthly" {% if item.billing_cycle == 'monthly' %}selected{% endif %}>月度</option>
-                      <option value="quarterly" {% if item.billing_cycle == 'quarterly' %}selected{% endif %}>季度</option>
-                      <option value="yearly" {% if item.billing_cycle == 'yearly' %}selected{% endif %}>年度</option>
-                      <option value="custom" {% if item.billing_cycle == 'custom' %}selected{% endif %}>自定义</option>
-                    </select></div>
-                    <div class="form-group"><label class="form-label-sm">自定义周期（天）</label><input name="custom_days" type="number" min="1" value="{{ item.custom_days }}" class="form-input" /></div>
-                    <div class="form-group"><label class="form-label-sm">价格</label><input name="price" type="number" min="0" step="0.01" value="{{ item.price|floatformat:2 }}" class="form-input" /></div>
-                    <div class="form-group"><label class="form-label-sm">订阅开始时间</label><input name="start_date" type="date" value="{{ item.start_date }}" class="form-input" /></div>
-                    <div class="form-group"><label class="form-label-sm">续订时间</label><input name="next_renewal_date" type="date" value="{{ item.next_renewal_date }}" class="form-input" required /></div>
-                    <div class="form-group"><label class="form-label-sm">订阅结束时间</label><input name="expiry_date" type="date" value="{{ item.expiry_date }}" class="form-input" /></div>
-                    <div class="form-group"><label class="form-label-sm">状态</label><select name="status" class="form-select">
-                      <option value="active" {% if item.status == 'active' %}selected{% endif %}>进行中</option>
-                      <option value="paused" {% if item.status == 'paused' %}selected{% endif %}>暂停</option>
-                      <option value="cancelled" {% if item.status == 'cancelled' %}selected{% endif %}>已取消</option>
-                    </select></div>
-                    <div class="form-group" style="grid-column: span 2;"><label class="form-label-sm">备注</label><input name="note" value="{{ item.note }}" class="form-input" /></div>
-                    <div style="grid-column: span 2;display:flex;justify-content:flex-end;">
-                      <button type="submit" class="btn-primary-lg">保存</button>
-                    </div>
-                  </form>
-                </div>
               </div>
             </td>
           </tr>
@@ -249,23 +327,123 @@
     </div>
   </div>
 </div>
+
+<!-- ===== 编辑弹窗（全局唯一，body 层级） ===== -->
+<div id="subEditOverlay" class="sub-edit-overlay" onclick="handleOverlayClick(event)">
+  <div class="sub-edit-card" onclick="event.stopPropagation()">
+    <div class="sub-edit-header">
+      <h3 class="sub-edit-title" id="subEditTitle">编辑订阅服务</h3>
+      <button type="button" class="sub-edit-close" onclick="closeSubEdit()">✕</button>
+    </div>
+    <form method="post" action="/lists/subscriptions/update/" id="subEditForm">
+      <div class="sub-edit-body">
+        {% csrf_token %}
+        <input type="hidden" name="item_id" id="edit_item_id" />
+        <div class="sub-edit-grid">
+          <div class="form-group">
+            <label class="form-label-sm">服务名称</label>
+            <input name="name" id="edit_name" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">服务类型</label>
+            <input name="service_type" id="edit_service_type" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">订阅周期</label>
+            <select name="billing_cycle" id="edit_billing_cycle" class="form-select">
+              <option value="monthly">月度</option>
+              <option value="quarterly">季度</option>
+              <option value="yearly">年度</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">自定义周期（天）</label>
+            <input name="custom_days" id="edit_custom_days" type="number" min="1" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">价格</label>
+            <input name="price" id="edit_price" type="number" min="0" step="0.01" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">状态</label>
+            <select name="status" id="edit_status" class="form-select">
+              <option value="active">进行中</option>
+              <option value="paused">暂停</option>
+              <option value="cancelled">已取消</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">订阅开始时间</label>
+            <input name="start_date" id="edit_start_date" type="date" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">续订时间
+              <span style="font-size:11px;color:#94a3b8;">（下次扣款日）</span>
+            </label>
+            <input name="next_renewal_date" id="edit_next_renewal_date" type="date" class="form-input" required />
+          </div>
+          <div class="form-group span2">
+            <label class="form-label-sm">订阅结束时间
+              <span style="font-size:11px;color:#94a3b8;">（服务到期日，可选。与续订时间区别：续订时间=下次扣款日；结束时间=服务失效日）</span>
+            </label>
+            <input name="expiry_date" id="edit_expiry_date" type="date" class="form-input" />
+          </div>
+          <div class="form-group span2">
+            <label class="form-label-sm">备注</label>
+            <input name="note" id="edit_note" class="form-input" />
+          </div>
+        </div>
+      </div>
+      <div class="sub-edit-footer">
+        <button type="button" class="sub-edit-btn-cancel" onclick="closeSubEdit()">取消</button>
+        <button type="submit" class="btn-primary-lg">保存修改</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
-  function openSubModal(id) {
-    var m = document.getElementById('sub-modal-' + id);
-    if (!m) return;
-    var holder = m.closest('tr');
-    if (holder) holder.style.display = 'table-row';
-    m.style.display = 'flex';
+  function openSubEdit(data) {
+    document.getElementById('subEditTitle').textContent = '编辑订阅服务：' + data.name;
+    document.getElementById('edit_item_id').value = data.id;
+    document.getElementById('edit_name').value = data.name;
+    document.getElementById('edit_service_type').value = data.service_type;
+    document.getElementById('edit_billing_cycle').value = data.billing_cycle;
+    document.getElementById('edit_custom_days').value = data.custom_days;
+    document.getElementById('edit_price').value = data.price;
+    document.getElementById('edit_start_date').value = data.start_date;
+    document.getElementById('edit_next_renewal_date').value = data.next_renewal_date;
+    document.getElementById('edit_expiry_date').value = data.expiry_date;
+    document.getElementById('edit_status').value = data.status;
+    document.getElementById('edit_note').value = data.note;
+
+    var overlay = document.getElementById('subEditOverlay');
+    overlay.style.display = 'flex';
+    requestAnimationFrame(function() {
+      overlay.classList.add('visible');
+    });
     document.body.style.overflow = 'hidden';
   }
-  function closeSubModal(id, event) {
-    if (event && event.target !== event.currentTarget) return;
-    var m = document.getElementById('sub-modal-' + id);
-    if (!m) return;
-    m.style.display = 'none';
-    var holder = m.closest('tr');
-    if (holder) holder.style.display = 'none';
-    document.body.style.overflow = '';
+
+  function closeSubEdit() {
+    var overlay = document.getElementById('subEditOverlay');
+    overlay.classList.remove('visible');
+    setTimeout(function() {
+      overlay.style.display = 'none';
+      document.body.style.overflow = '';
+    }, 200);
   }
+
+  function handleOverlayClick(event) {
+    if (event.target === event.currentTarget) {
+      closeSubEdit();
+    }
+  }
+
+  // ESC 键关闭
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSubEdit();
+  });
 </script>
 {% endblock %}
