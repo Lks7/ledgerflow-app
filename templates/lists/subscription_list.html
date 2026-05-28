@@ -2,59 +2,76 @@
 {% block title %}订阅服务管理{% endblock %}
 {% block content %}
 <style>
-  /* ===== 订阅到期进度条 ===== */
-  .sub-progress-wrap {
-    margin-top: 6px;
-  }
+  /* ===== 进度条 ===== */
+  .sub-progress-wrap { margin-top: 6px; }
   .sub-progress-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 11px;
-    color: #94a3b8;
-    margin-bottom: 3px;
-    white-space: nowrap;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: #94a3b8; margin-bottom: 3px; white-space: nowrap;
   }
   .sub-days-left {
-    font-weight: 600;
-    font-size: 11.5px;
-    padding: 1px 6px;
-    border-radius: 20px;
-    white-space: nowrap;
+    font-weight: 600; font-size: 11.5px; padding: 1px 6px;
+    border-radius: 20px; white-space: nowrap;
   }
   .sub-days-left.green  { background: rgba(34,197,94,.15);  color: #16a34a; }
   .sub-days-left.yellow { background: rgba(234,179,8,.15);  color: #b45309; }
   .sub-days-left.red    { background: rgba(239,68,68,.15);  color: #dc2626; }
   .sub-progress-bar {
-    width: 100%;
-    height: 5px;
-    border-radius: 9999px;
-    background: rgba(148,163,184,.18);
-    overflow: hidden;
-    min-width: 80px;
+    width: 100%; height: 5px; border-radius: 9999px;
+    background: rgba(148,163,184,.18); overflow: hidden; min-width: 80px;
   }
   .sub-progress-fill {
-    height: 100%;
-    border-radius: 9999px;
+    height: 100%; border-radius: 9999px;
     transition: width .6s cubic-bezier(.4,0,.2,1);
     animation: subFillIn .7s ease both;
   }
-  @keyframes subFillIn {
-    from { width: 0 !important; }
-  }
+  @keyframes subFillIn { from { width: 0 !important; } }
   .sub-progress-fill.green  { background: linear-gradient(90deg,#4ade80,#22c55e); }
   .sub-progress-fill.yellow { background: linear-gradient(90deg,#fde047,#f59e0b); }
   .sub-progress-fill.red    { background: linear-gradient(90deg,#f87171,#ef4444); }
-  /* 过期标签 */
-  .sub-expired-badge {
-    display: inline-flex; align-items: center; gap: 3px;
-    background: rgba(239,68,68,.12); color: #dc2626;
-    font-size: 11px; font-weight: 600; padding: 2px 7px;
-    border-radius: 20px; margin-top: 4px;
-  }
 
-  /* ===== 编辑弹窗 ===== */
-  .sub-edit-overlay {
+  /* ===== 状态徽章 ===== */
+  .sub-status-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  }
+  .sub-status-active   { background: rgba(34,197,94,.12);  color: #16a34a; }
+  .sub-status-paused   { background: rgba(234,179,8,.12);  color: #b45309; }
+  .sub-status-cancelled{ background: rgba(148,163,184,.15);color: #64748b; }
+
+  /* ===== 页头操作区 ===== */
+  .sub-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .sub-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 20px;
+    background: var(--brand, #16a34a);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(22,163,74,.25);
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+  .sub-add-btn:hover {
+    background: #15803d;
+    box-shadow: 0 4px 14px rgba(22,163,74,.35);
+    transform: translateY(-1px);
+  }
+  .sub-add-btn svg { flex-shrink: 0; }
+
+  /* ===== 弹窗通用 ===== */
+  .sub-overlay {
     position: fixed;
     inset: 0;
     background: rgba(15, 23, 42, 0.55);
@@ -67,25 +84,25 @@
     pointer-events: none;
     transition: opacity 0.2s ease;
   }
-  .sub-edit-overlay.visible {
+  .sub-overlay.visible {
     opacity: 1;
     pointer-events: auto;
   }
-  .sub-edit-card {
-    width: min(640px, 100%);
-    max-height: calc(100vh - 32px);
+  .sub-modal-card {
+    width: min(660px, 100%);
+    max-height: calc(100vh - 40px);
     overflow-y: auto;
     background: #ffffff;
-    border-radius: 16px;
+    border-radius: 18px;
     border: 1px solid #e2e8f0;
-    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.25);
-    transform: scale(0.95) translateY(10px);
-    transition: transform 0.2s ease;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.22);
+    transform: scale(0.94) translateY(12px);
+    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1);
   }
-  .sub-edit-overlay.visible .sub-edit-card {
+  .sub-overlay.visible .sub-modal-card {
     transform: scale(1) translateY(0);
   }
-  .sub-edit-header {
+  .sub-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -94,78 +111,81 @@
     position: sticky;
     top: 0;
     background: #ffffff;
-    border-radius: 16px 16px 0 0;
+    border-radius: 18px 18px 0 0;
     z-index: 1;
   }
-  .sub-edit-title {
+  .sub-modal-title {
     margin: 0;
     font-size: 17px;
     font-weight: 700;
     color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
-  .sub-edit-close {
+  .sub-modal-close {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 18px;
-    color: #64748b;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 17px; color: #64748b;
     transition: all 0.15s;
+    flex-shrink: 0;
   }
-  .sub-edit-close:hover {
-    background: #fee2e2;
-    border-color: #fca5a5;
-    color: #dc2626;
-  }
-  .sub-edit-body {
-    padding: 20px 24px 24px;
-  }
-  .sub-edit-grid {
+  .sub-modal-close:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+  .sub-modal-body { padding: 20px 24px; }
+  .sub-modal-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
   }
-  .sub-edit-grid .span2 {
-    grid-column: span 2;
-  }
-  .sub-edit-footer {
-    padding: 16px 24px;
+  .sub-modal-grid .span2 { grid-column: span 2; }
+  .sub-modal-footer {
+    padding: 14px 24px 20px;
     border-top: 1px solid #f1f5f9;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
   }
-  .sub-edit-btn-cancel {
+  .sub-btn-cancel {
     padding: 8px 18px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #fff;
-    color: #64748b;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+    background: #fff; color: #64748b;
+    font-size: 14px; font-weight: 500; cursor: pointer;
     transition: all 0.15s;
   }
-  .sub-edit-btn-cancel:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+  .sub-btn-cancel:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+  /* ===== 表格空态 ===== */
+  .sub-empty-state {
+    text-align: center;
+    padding: 56px 24px;
+    color: #94a3b8;
   }
+  .sub-empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .sub-empty-text { font-size: 15px; font-weight: 500; color: #64748b; margin-bottom: 6px; }
+  .sub-empty-hint { font-size: 13px; color: #94a3b8; }
 </style>
 
 <div class="report-page">
-  <div class="report-header">
+
+  <!-- 页头 -->
+  <div class="sub-page-header">
     <div>
       <h2 class="page-title">🔁 订阅服务管理</h2>
-      <p class="page-desc">管理服务器、会员等订阅项目，支持月度/季度/年度/自定义续订。</p>
+      <p class="page-desc">追踪所有订阅项目的费用、续费时间与剩余天数。</p>
     </div>
+    <button class="sub-add-btn" onclick="openAddModal()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 3v10M3 8h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      新增订阅
+    </button>
   </div>
 
-  <div class="stat-cards" style="margin-bottom:16px;">
+  <!-- 统计卡片 -->
+  <div class="stat-cards" style="margin-bottom:20px;">
     <div class="stat-card stat-income">
       <div class="stat-icon">📦</div>
       <div class="stat-body">
@@ -176,82 +196,37 @@
     <div class="stat-card stat-expense">
       <div class="stat-icon">💴</div>
       <div class="stat-body">
-        <div class="stat-label">当前价格合计</div>
+        <div class="stat-label">价格合计（进行中）</div>
         <div class="stat-value">¥{{ summary.total_price|floatformat:2 }}</div>
       </div>
     </div>
   </div>
 
-  <div class="form-card" style="margin-bottom:16px;">
-    <div class="form-card-header">
-      <span class="form-card-icon">➕</span>
-      <h3 class="form-card-title">新增订阅服务</h3>
-    </div>
-    <form method="post" action="/lists/subscriptions/create/" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;">
-      {% csrf_token %}
-      <div class="form-group">
-        <label class="form-label-sm">服务名称</label>
-        <input name="name" class="form-input" placeholder="如：阿里云服务器 / Netflix" required />
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">服务类型</label>
-        <input name="service_type" class="form-input" placeholder="服务器 / 会员 / 域名" />
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">订阅周期</label>
-        <select name="billing_cycle" class="form-select">
-          <option value="monthly">月度</option>
-          <option value="quarterly">季度</option>
-          <option value="yearly">年度</option>
-          <option value="custom">自定义</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">自定义周期（天）</label>
-        <input name="custom_days" type="number" min="1" value="30" class="form-input" />
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">价格</label>
-        <input name="price" type="number" min="0" step="0.01" class="form-input" placeholder="0.00" />
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">订阅开始时间</label>
-        <input name="start_date" type="date" value="{{ today }}" class="form-input" />
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">续订时间 <span style="font-size:11px;color:#94a3b8;">（下次扣款日）</span></label>
-        <input name="next_renewal_date" type="date" value="{{ today }}" class="form-input" required />
-      </div>
-      <div class="form-group">
-        <label class="form-label-sm">订阅结束时间 <span style="font-size:11px;color:#94a3b8;">（服务到期日，可选）</span></label>
-        <input name="expiry_date" type="date" class="form-input" />
-      </div>
-      <div class="form-group" style="grid-column: span 3;">
-        <label class="form-label-sm">备注</label>
-        <input name="note" class="form-input" placeholder="例如：香港节点 / 工作邮箱 / 看片" />
-      </div>
-      <div style="display:flex;justify-content:flex-end;align-items:end;">
-        <button type="submit" class="btn-primary-lg">新增服务</button>
-      </div>
-    </form>
-  </div>
-
+  <!-- 订阅列表 -->
   <div class="form-card">
     <div class="form-card-header">
       <span class="form-card-icon">📋</span>
       <h3 class="form-card-title">全部订阅服务</h3>
     </div>
+
+    {% if items %}
     <div class="acc-table-wrap">
       <table class="acc-table">
         <thead>
           <tr>
-            <th>名称</th>
+            <th>名称 / 备注</th>
             <th>类型</th>
             <th>周期</th>
             <th>价格</th>
-            <th>订阅开始时间</th>
-            <th>续订时间 <span style="font-weight:400;color:#b0bec5;font-size:11px;">下次扣款</span></th>
-            <th>结束时间 <span style="font-weight:400;color:#b0bec5;font-size:11px;">服务到期</span></th>
+            <th>开始日期</th>
+            <th>
+              续订时间
+              <span style="font-weight:400;color:#b0bec5;font-size:11px;display:block;">下次扣款</span>
+            </th>
+            <th>
+              结束时间
+              <span style="font-weight:400;color:#b0bec5;font-size:11px;display:block;">服务到期</span>
+            </th>
             <th>状态</th>
             <th>操作</th>
           </tr>
@@ -260,21 +235,31 @@
           {% for item in items %}
           <tr>
             <td>
-              <strong>{{ item.name }}</strong>
-              <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ item.note|default:'-' }}</div>
+              <strong style="color:#0f172a;">{{ item.name }}</strong>
+              {% if item.note %}
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px;">{{ item.note }}</div>
+              {% endif %}
             </td>
-            <td>{{ item.service_type|default:'-' }}</td>
-            <td>
-              {% if item.billing_cycle == 'monthly' %}月度{% elif item.billing_cycle == 'quarterly' %}季度{% elif item.billing_cycle == 'yearly' %}年度{% else %}自定义 {{ item.custom_days }} 天{% endif %}
+            <td style="color:#475569;">{{ item.service_type|default:'—' }}</td>
+            <td style="white-space:nowrap;">
+              {% if item.billing_cycle == 'monthly' %}
+                <span style="color:#2563eb;font-weight:600;">月度</span>
+              {% elif item.billing_cycle == 'quarterly' %}
+                <span style="color:#7c3aed;font-weight:600;">季度</span>
+              {% elif item.billing_cycle == 'yearly' %}
+                <span style="color:#0891b2;font-weight:600;">年度</span>
+              {% else %}
+                <span style="color:#64748b;">{{ item.custom_days }}天</span>
+              {% endif %}
             </td>
-            <td class="acc-num">¥{{ item.price|floatformat:2 }}</td>
-            <td>{{ item.start_date|default:'-' }}</td>
+            <td class="acc-num" style="font-weight:700;color:#0f172a;">¥{{ item.price|floatformat:2 }}</td>
+            <td style="color:#64748b;font-size:13px;">{{ item.start_date|default:'—' }}</td>
             <td>
-              <div>{{ item.next_renewal_date }}</div>
+              <div style="font-size:13px;font-weight:600;color:#0f172a;">{{ item.next_renewal_date }}</div>
               {% if item.status == 'active' %}
               <div class="sub-progress-wrap">
                 <div class="sub-progress-meta">
-                  <span>已用 {{ item.progress_pct }}%</span>
+                  <span>{{ item.progress_pct }}%</span>
                   {% if item.days_left == 0 %}
                     <span class="sub-days-left red">⚠ 已到期</span>
                   {% else %}
@@ -282,23 +267,30 @@
                   {% endif %}
                 </div>
                 <div class="sub-progress-bar">
-                  <div class="sub-progress-fill {{ item.progress_color }}"
-                       style="width:{{ item.progress_pct }}%"></div>
+                  <div class="sub-progress-fill {{ item.progress_color }}" style="width:{{ item.progress_pct }}%"></div>
                 </div>
               </div>
               {% endif %}
             </td>
-            <td>{{ item.expiry_date|default:'-' }}</td>
-            <td>{{ item.status }}</td>
+            <td style="color:#64748b;font-size:13px;">{{ item.expiry_date|default:'—' }}</td>
             <td>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              {% if item.status == 'active' %}
+                <span class="sub-status-badge sub-status-active">● 进行中</span>
+              {% elif item.status == 'paused' %}
+                <span class="sub-status-badge sub-status-paused">⏸ 暂停</span>
+              {% else %}
+                <span class="sub-status-badge sub-status-cancelled">✕ 已取消</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center;">
                 <form method="post" action="/lists/subscriptions/renew/" style="display:inline;">
                   {% csrf_token %}
                   <input type="hidden" name="item_id" value="{{ item.id }}" />
-                  <button type="submit" class="sl-action-btn btn-done">续订</button>
+                  <button type="submit" class="sl-action-btn btn-done" title="续订一个周期">续订</button>
                 </form>
-                <button type="button" class="sl-action-btn btn-journal"
-                  onclick="openSubEdit({
+                <button type="button" class="sl-action-btn btn-journal" title="编辑"
+                  onclick="openEditModal({
                     id: '{{ item.id }}',
                     name: '{{ item.name|escapejs }}',
                     service_type: '{{ item.service_type|escapejs }}',
@@ -311,37 +303,116 @@
                     status: '{{ item.status }}',
                     note: '{{ item.note|escapejs }}'
                   })">编辑</button>
-                <form method="post" action="/lists/subscriptions/delete/" style="display:inline;" onsubmit="return confirm('确认删除该订阅服务？')">
+                <form method="post" action="/lists/subscriptions/delete/" style="display:inline;"
+                      onsubmit="return confirm('确认删除「{{ item.name|escapejs }}」？此操作不可撤销。')">
                   {% csrf_token %}
                   <input type="hidden" name="item_id" value="{{ item.id }}" />
-                  <button type="submit" class="sl-action-btn btn-delete">删除</button>
+                  <button type="submit" class="sl-action-btn btn-delete" title="删除">删除</button>
                 </form>
               </div>
             </td>
           </tr>
-          {% empty %}
-          <tr><td colspan="9" style="text-align:center;color:#64748b;padding:28px;">暂无订阅服务，请先新增。</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% else %}
+    <div class="sub-empty-state">
+      <div class="sub-empty-icon">📭</div>
+      <div class="sub-empty-text">还没有订阅服务</div>
+      <div class="sub-empty-hint">点击右上角「新增订阅」开始添加</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ============================================================
+     新增弹窗
+============================================================ -->
+<div id="addOverlay" class="sub-overlay" onclick="handleOverlayClick('addOverlay', event)">
+  <div class="sub-modal-card" onclick="event.stopPropagation()">
+    <div class="sub-modal-header">
+      <h3 class="sub-modal-title">➕ 新增订阅服务</h3>
+      <button type="button" class="sub-modal-close" onclick="closeModal('addOverlay')">✕</button>
+    </div>
+    <form method="post" action="/lists/subscriptions/create/">
+      <div class="sub-modal-body">
+        {% csrf_token %}
+        <div class="sub-modal-grid">
+          <div class="form-group">
+            <label class="form-label-sm">服务名称 <span style="color:#ef4444;">*</span></label>
+            <input name="name" id="add_name" class="form-input" placeholder="如：阿里云 ECS / Netflix / GitHub Pro" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">服务类型</label>
+            <input name="service_type" class="form-input" placeholder="服务器 / 会员 / 域名 / 工具" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">订阅周期</label>
+            <select name="billing_cycle" class="form-select">
+              <option value="monthly">月度（每月）</option>
+              <option value="quarterly">季度（每3月）</option>
+              <option value="yearly">年度（每年）</option>
+              <option value="custom">自定义天数</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">自定义周期（天）</label>
+            <input name="custom_days" type="number" min="1" value="30" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">价格（元）</label>
+            <input name="price" type="number" min="0" step="0.01" class="form-input" placeholder="0.00" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">订阅开始时间</label>
+            <input name="start_date" type="date" value="{{ today }}" class="form-input" />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">
+              续订时间 <span style="color:#ef4444;">*</span>
+              <span style="font-size:11px;color:#94a3b8;font-weight:400;">（下次扣款日）</span>
+            </label>
+            <input name="next_renewal_date" type="date" value="{{ today }}" class="form-input" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label-sm">
+              服务到期时间
+              <span style="font-size:11px;color:#94a3b8;font-weight:400;">（服务失效日，可选）</span>
+            </label>
+            <input name="expiry_date" type="date" class="form-input" />
+          </div>
+          <div class="form-group span2">
+            <label class="form-label-sm">备注</label>
+            <input name="note" class="form-input" placeholder="例如：香港节点 / 主力邮箱 / 家庭套餐" />
+          </div>
+        </div>
+      </div>
+      <div class="sub-modal-footer">
+        <button type="button" class="sub-btn-cancel" onclick="closeModal('addOverlay')">取消</button>
+        <button type="submit" class="btn-primary-lg">✓ 确认新增</button>
+      </div>
+    </form>
   </div>
 </div>
 
-<!-- ===== 编辑弹窗（全局唯一，body 层级） ===== -->
-<div id="subEditOverlay" class="sub-edit-overlay" onclick="handleOverlayClick(event)">
-  <div class="sub-edit-card" onclick="event.stopPropagation()">
-    <div class="sub-edit-header">
-      <h3 class="sub-edit-title" id="subEditTitle">编辑订阅服务</h3>
-      <button type="button" class="sub-edit-close" onclick="closeSubEdit()">✕</button>
+<!-- ============================================================
+     编辑弹窗
+============================================================ -->
+<div id="editOverlay" class="sub-overlay" onclick="handleOverlayClick('editOverlay', event)">
+  <div class="sub-modal-card" onclick="event.stopPropagation()">
+    <div class="sub-modal-header">
+      <h3 class="sub-modal-title" id="editModalTitle">✏️ 编辑订阅服务</h3>
+      <button type="button" class="sub-modal-close" onclick="closeModal('editOverlay')">✕</button>
     </div>
-    <form method="post" action="/lists/subscriptions/update/" id="subEditForm">
-      <div class="sub-edit-body">
+    <form method="post" action="/lists/subscriptions/update/">
+      <div class="sub-modal-body">
         {% csrf_token %}
         <input type="hidden" name="item_id" id="edit_item_id" />
-        <div class="sub-edit-grid">
+        <div class="sub-modal-grid">
           <div class="form-group">
-            <label class="form-label-sm">服务名称</label>
+            <label class="form-label-sm">服务名称 <span style="color:#ef4444;">*</span></label>
             <input name="name" id="edit_name" class="form-input" required />
           </div>
           <div class="form-group">
@@ -351,10 +422,10 @@
           <div class="form-group">
             <label class="form-label-sm">订阅周期</label>
             <select name="billing_cycle" id="edit_billing_cycle" class="form-select">
-              <option value="monthly">月度</option>
-              <option value="quarterly">季度</option>
-              <option value="yearly">年度</option>
-              <option value="custom">自定义</option>
+              <option value="monthly">月度（每月）</option>
+              <option value="quarterly">季度（每3月）</option>
+              <option value="yearly">年度（每年）</option>
+              <option value="custom">自定义天数</option>
             </select>
           </div>
           <div class="form-group">
@@ -362,7 +433,7 @@
             <input name="custom_days" id="edit_custom_days" type="number" min="1" class="form-input" />
           </div>
           <div class="form-group">
-            <label class="form-label-sm">价格</label>
+            <label class="form-label-sm">价格（元）</label>
             <input name="price" id="edit_price" type="number" min="0" step="0.01" class="form-input" />
           </div>
           <div class="form-group">
@@ -378,14 +449,16 @@
             <input name="start_date" id="edit_start_date" type="date" class="form-input" />
           </div>
           <div class="form-group">
-            <label class="form-label-sm">续订时间
-              <span style="font-size:11px;color:#94a3b8;">（下次扣款日）</span>
+            <label class="form-label-sm">
+              续订时间 <span style="color:#ef4444;">*</span>
+              <span style="font-size:11px;color:#94a3b8;font-weight:400;">（下次扣款日）</span>
             </label>
             <input name="next_renewal_date" id="edit_next_renewal_date" type="date" class="form-input" required />
           </div>
           <div class="form-group span2">
-            <label class="form-label-sm">订阅结束时间
-              <span style="font-size:11px;color:#94a3b8;">（服务到期日，可选。与续订时间区别：续订时间=下次扣款日；结束时间=服务失效日）</span>
+            <label class="form-label-sm">
+              服务到期时间
+              <span style="font-size:11px;color:#94a3b8;font-weight:400;">（服务失效日，可选）</span>
             </label>
             <input name="expiry_date" id="edit_expiry_date" type="date" class="form-input" />
           </div>
@@ -395,55 +468,72 @@
           </div>
         </div>
       </div>
-      <div class="sub-edit-footer">
-        <button type="button" class="sub-edit-btn-cancel" onclick="closeSubEdit()">取消</button>
-        <button type="submit" class="btn-primary-lg">保存修改</button>
+      <div class="sub-modal-footer">
+        <button type="button" class="sub-btn-cancel" onclick="closeModal('editOverlay')">取消</button>
+        <button type="submit" class="btn-primary-lg">✓ 保存修改</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
-  function openSubEdit(data) {
-    document.getElementById('subEditTitle').textContent = '编辑订阅服务：' + data.name;
-    document.getElementById('edit_item_id').value = data.id;
-    document.getElementById('edit_name').value = data.name;
-    document.getElementById('edit_service_type').value = data.service_type;
-    document.getElementById('edit_billing_cycle').value = data.billing_cycle;
-    document.getElementById('edit_custom_days').value = data.custom_days;
-    document.getElementById('edit_price').value = data.price;
-    document.getElementById('edit_start_date').value = data.start_date;
-    document.getElementById('edit_next_renewal_date').value = data.next_renewal_date;
-    document.getElementById('edit_expiry_date').value = data.expiry_date;
-    document.getElementById('edit_status').value = data.status;
-    document.getElementById('edit_note').value = data.note;
-
-    var overlay = document.getElementById('subEditOverlay');
-    overlay.style.display = 'flex';
+  // ===== 通用弹窗控制 =====
+  function openModal(id) {
+    var el = document.getElementById(id);
+    el.style.display = 'flex';
     requestAnimationFrame(function() {
-      overlay.classList.add('visible');
+      requestAnimationFrame(function() {
+        el.classList.add('visible');
+      });
     });
     document.body.style.overflow = 'hidden';
   }
 
-  function closeSubEdit() {
-    var overlay = document.getElementById('subEditOverlay');
-    overlay.classList.remove('visible');
+  function closeModal(id) {
+    var el = document.getElementById(id);
+    el.classList.remove('visible');
     setTimeout(function() {
-      overlay.style.display = 'none';
+      el.style.display = 'none';
       document.body.style.overflow = '';
-    }, 200);
+    }, 220);
   }
 
-  function handleOverlayClick(event) {
-    if (event.target === event.currentTarget) {
-      closeSubEdit();
-    }
+  function handleOverlayClick(id, event) {
+    if (event.target === event.currentTarget) closeModal(id);
   }
 
-  // ESC 键关闭
+  // ===== 新增弹窗 =====
+  function openAddModal() {
+    openModal('addOverlay');
+    // 聚焦到第一个输入
+    setTimeout(function() {
+      document.getElementById('add_name').focus();
+    }, 250);
+  }
+
+  // ===== 编辑弹窗 =====
+  function openEditModal(data) {
+    document.getElementById('editModalTitle').textContent = '✏️ 编辑：' + data.name;
+    document.getElementById('edit_item_id').value           = data.id;
+    document.getElementById('edit_name').value              = data.name;
+    document.getElementById('edit_service_type').value      = data.service_type;
+    document.getElementById('edit_billing_cycle').value     = data.billing_cycle;
+    document.getElementById('edit_custom_days').value       = data.custom_days;
+    document.getElementById('edit_price').value             = data.price;
+    document.getElementById('edit_start_date').value        = data.start_date;
+    document.getElementById('edit_next_renewal_date').value = data.next_renewal_date;
+    document.getElementById('edit_expiry_date').value       = data.expiry_date;
+    document.getElementById('edit_status').value            = data.status;
+    document.getElementById('edit_note').value              = data.note;
+    openModal('editOverlay');
+  }
+
+  // ===== ESC 关闭 =====
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeSubEdit();
+    if (e.key === 'Escape') {
+      closeModal('editOverlay');
+      closeModal('addOverlay');
+    }
   });
 </script>
 {% endblock %}
