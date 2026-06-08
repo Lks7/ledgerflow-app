@@ -139,12 +139,41 @@ def journal_list(request):
             item["display_currency"] = (transfer.get("currency") or "").strip() or "CNY"
             transfers.append(item)
 
+        # ── 简化视图字段：提取支出方账户 + 金额 ──
+        # 支出方 = credit > 0 且账户类型为 asset 或 liability（实际付钱的账户）
+        account_type_map_local = {a.get("id", ""): a.get("type", "") for a in accounts}
+        simple_account_name = ""
+        simple_amount = 0.0
+        simple_currency = "CNY"
+        simple_income_amount = 0.0
+        for e in entries:
+            acc_type = account_type_map_local.get(e.get("account_id", ""), "")
+            credit_amt = e.get("credit_amount", 0.0)
+            debit_amt = e.get("debit_amount", 0.0)
+            if acc_type in ("asset", "liability") and credit_amt > 0:
+                # 支出方账户
+                if not simple_account_name:
+                    simple_account_name = e.get("account_name", "")
+                simple_amount += credit_amt
+                simple_currency = (e.get("currency") or "CNY").strip() or "CNY"
+            elif acc_type == "income" and credit_amt > 0:
+                # 收入方
+                simple_income_amount += credit_amt
+                if not simple_account_name:
+                    simple_account_name = e.get("account_name", "")
+                simple_currency = (e.get("currency") or "CNY").strip() or "CNY"
+
         item = dict(journal)
         item["entries"] = entries
         item["transfers"] = transfers
         item["primary_category_id"] = primary_category_id
         item["primary_category_name"] = category_map.get(primary_category_id, "")
         item["tags_str"] = ",".join(journal.get("tags") or [])
+        item["simple_account_name"] = simple_account_name
+        item["simple_amount"] = round(simple_amount, 2)
+        item["simple_income_amount"] = round(simple_income_amount, 2)
+        item["simple_currency"] = simple_currency
+        item["is_income"] = simple_income_amount > 0 and simple_amount == 0
         journals.append(item)
 
     # ── 日历视图：按日聚合统计 ──────────────────────────────
